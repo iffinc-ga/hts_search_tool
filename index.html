@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trimika · Entry HTS Search · IFF</title>
+<title>Entry HTS Search · IFF</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -274,12 +274,16 @@ td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:350px}
         <div>
           <label class="lbl">Entry Date Range (optional)</label>
           <div style="display:flex;gap:7px;align-items:center">
-            <input type="date" id="dfrom" style="flex:1;font-size:.78rem;padding:6px 8px">
+            <input type="text" id="dfrom" class="mono" placeholder="MM/DD/YYYY"
+              style="flex:1;font-size:.78rem;padding:6px 8px"
+              oninput="fmtDate(this)" maxlength="10">
             <span style="font-size:.72rem;color:var(--g400)">–</span>
-            <input type="date" id="dto"   style="flex:1;font-size:.78rem;padding:6px 8px">
+            <input type="text" id="dto" class="mono" placeholder="MM/DD/YYYY"
+              style="flex:1;font-size:.78rem;padding:6px 8px"
+              oninput="fmtDate(this)" maxlength="10">
           </div>
           <div style="font-size:.67rem;color:var(--g400);margin-top:3px">
-            Leave blank to search all dates (1/1/2025 – yesterday)
+            Leave blank to search all dates · type freely, e.g. 01/01/2025
           </div>
         </div>
         <div class="row-c">
@@ -489,6 +493,27 @@ function getSearchCodes() {
 }
 
 // ═══════════════════════════════════════════════════
+// DATE TEXT INPUT HELPERS
+// ═══════════════════════════════════════════════════
+function fmtDate(inp) {
+  let v = inp.value.replace(/[^0-9]/g, '');
+  if (v.length > 2)  v = v.slice(0,2) + '/' + v.slice(2);
+  if (v.length > 5)  v = v.slice(0,5) + '/' + v.slice(5);
+  if (v.length > 10) v = v.slice(0,10);
+  inp.value = v;
+  const full = v.length === 10;
+  inp.style.borderColor = (full && isNaN(new Date(v))) ? 'var(--red)' : '';
+}
+
+function parseDt(str, endOfDay) {
+  if (!str || str.length < 8) return null;
+  const d = new Date(str);
+  if (isNaN(d)) return null;
+  if (endOfDay) d.setHours(23,59,59,999);
+  return d;
+}
+
+// ═══════════════════════════════════════════════════
 // SEARCH
 // ═══════════════════════════════════════════════════
 function doSearch() {
@@ -504,8 +529,8 @@ function doSearch() {
     if (dfrom || dto) {
       const d = new Date(row[C.entryDate]);
       if (!isNaN(d)) {
-        if (dfrom && d < new Date(dfrom))              return false;
-        if (dto   && d > new Date(dto + 'T23:59:59')) return false;
+        if (dfrom && parseDt(dfrom) && d < parseDt(dfrom))        return false;
+        if (dto   && parseDt(dto)   && d > parseDt(dto, true))    return false;
       }
     }
     // ANY match — at least one search code matches any HTS code in the row
