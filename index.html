@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trimika · Entry HTS Search · IFF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:       #0f2545;
+  --navy-mid:   #1a3a6b;
+  --navy-lt:    #2a5298;
+  --amber:      #e8a020;
+  --amber-lt:   #f5c842;
+  --green:      #0e9e6a;
+  --red:        #c93535;
+  --teal:       #0d7f8f;
+  --white:      #ffffff;
+  --off:        #f5f7fb;
+  --g100:       #eef1f7;
+  --g200:       #dde3ee;
+  --g300:       #bec8da;
+  --g400:       #8e9bb5;
+  --g600:       #4a5678;
+  --g700:       #2e3a52;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--off);color:var(--g700);min-height:100vh}
+
+/* HEADER */
+.hdr{background:var(--navy);padding:0 24px;display:flex;align-items:stretch;gap:20px;
+  box-shadow:0 3px 14px rgba(0,0,0,.4);position:sticky;top:0;z-index:100}
+.hdr-brand{display:flex;align-items:center;gap:12px;padding:13px 0;
+  border-right:1px solid rgba(255,255,255,.1);padding-right:20px}
+.logo{width:34px;height:34px;background:var(--amber);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:var(--navy);font-size:.82rem;letter-spacing:.5px;flex-shrink:0}
+.hdr-title{font-size:.95rem;font-weight:600;color:var(--white);letter-spacing:.2px}
+.hdr-sub{font-size:.68rem;color:rgba(255,255,255,.45);margin-top:1px;letter-spacing:.3px}
+.hdr-pills{display:flex;align-items:center;gap:6px;padding:13px 0}
+.pill{padding:2px 9px;border-radius:20px;font-size:.65rem;font-weight:700;
+  letter-spacing:.4px;text-transform:uppercase}
+.p-amber{background:var(--amber);color:var(--navy)}
+.p-teal{background:rgba(13,127,143,.3);color:#7ee8f5;border:1px solid rgba(13,127,143,.4)}
+.p-gray{background:rgba(255,255,255,.07);color:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.1)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.hdr-badge{text-align:right;font-size:.72rem}
+.hdr-badge .hb-main{color:#7ee8f5;font-weight:600}
+.hdr-badge .hb-sub{color:rgba(255,255,255,.4);font-size:.65rem}
+
+/* LAYOUT */
+main{max-width:1440px;margin:0 auto;padding:18px 18px 40px;display:flex;flex-direction:column;gap:14px}
+
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--g200);border-radius:9px;
+  overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.05)}
+.ch{background:var(--navy-mid);color:var(--white);padding:8px 15px;font-size:.78rem;
+  font-weight:600;letter-spacing:.35px;display:flex;align-items:center;
+  justify-content:space-between;gap:10px}
+.ch-left{display:flex;align-items:center;gap:8px}
+.cb{padding:14px 16px}
+
+/* FORMS */
+.lbl{display:block;font-size:.68rem;font-weight:600;color:var(--g400);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+input[type=text],input[type=password],input[type=date]{
+  width:100%;border:1px solid var(--g200);border-radius:5px;
+  padding:7px 10px;font-size:.85rem;font-family:var(--sans);color:var(--g700);
+  background:var(--white);transition:border-color .14s,box-shadow .14s}
+input:focus{outline:none;border-color:var(--navy-lt);box-shadow:0 0 0 3px rgba(42,82,152,.1)}
+.mono{font-family:var(--mono)!important;font-size:.82rem!important;letter-spacing:.3px}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 15px;
+  border-radius:5px;font-size:.8rem;font-weight:600;cursor:pointer;border:none;
+  transition:all .14s;white-space:nowrap;font-family:var(--sans)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-navy{background:var(--navy-mid);color:var(--white)}
+.btn-navy:hover:not(:disabled){background:var(--navy-lt)}
+.btn-amber{background:var(--amber);color:var(--navy)}
+.btn-amber:hover:not(:disabled){background:var(--amber-lt)}
+.btn-green{background:var(--green);color:var(--white)}
+.btn-green:hover:not(:disabled){filter:brightness(1.1)}
+.btn-ghost{background:transparent;color:var(--g600);border:1px solid var(--g200)}
+.btn-ghost:hover:not(:disabled){background:var(--g100)}
+.btn-sm{padding:4px 11px;font-size:.75rem}
+.btn-xs{padding:3px 8px;font-size:.7rem}
+.bx{background:none;border:none;cursor:pointer;color:var(--g400);
+  padding:3px 6px;border-radius:4px;font-size:.85rem;transition:all .13s}
+.bx:hover{background:var(--g100);color:var(--red)}
+
+/* GRIDS */
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:11px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap}
+.row-c{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+
+/* CONFIG */
+.cfg-link{font-size:.7rem;color:rgba(255,255,255,.55);cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px;transition:color .13s}
+.cfg-link:hover{color:var(--amber-lt)}
+#cfgPanel{border-top:1px solid var(--g100);background:var(--off)}
+#cfgPanel .cb{padding:13px 16px}
+.tok-note{font-size:.68rem;color:var(--g400);margin-top:3px}
+
+/* HTS INPUTS */
+.hts-list{display:flex;flex-direction:column;gap:7px}
+.hts-row{display:flex;gap:7px;align-items:center}
+.hts-row input{flex:1}
+.htag{font-size:.62rem;font-weight:700;letter-spacing:.35px;padding:2px 7px;
+  border-radius:3px;text-transform:uppercase;white-space:nowrap;
+  flex-shrink:0;min-width:66px;text-align:center}
+.t-ieepa{background:#fee2e2;color:#991b1b}
+.t-232  {background:#fef3c7;color:#92400e}
+.t-310  {background:#ede9fe;color:#5b21b6}
+.t-122  {background:#d1fae5;color:#065f46}
+.t-ch97 {background:#e0f2fe;color:#0c4a6e}
+.t-other{background:var(--g100);color:var(--g600)}
+
+/* MATCH TOGGLE */
+.mtog{display:flex;border:1px solid var(--g200);border-radius:5px;overflow:hidden}
+.mtog label{flex:1;text-align:center;padding:5px 13px;font-size:.75rem;
+  font-weight:600;cursor:pointer;transition:all .13s;color:var(--g600);background:var(--white)}
+.mtog input[type=radio]{display:none}
+.mtog input:checked+label{background:var(--navy-mid);color:var(--white)}
+
+/* ALERTS */
+.alert{padding:8px 12px;border-radius:5px;font-size:.8rem;
+  display:flex;align-items:center;gap:7px}
+.a-info   {background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.a-ok     {background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.a-err    {background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.a-warn   {background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+
+/* STAT CHIPS */
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+.chip{background:var(--off);border:1px solid var(--g200);border-radius:5px;
+  padding:5px 11px;font-size:.75rem;color:var(--g600)}
+.chip strong{color:var(--navy-mid);font-size:.85rem}
+
+/* TABLE */
+.tbar{padding:7px 15px;background:var(--off);border-bottom:1px solid var(--g200);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:.78rem;color:var(--g600)}
+.rcount{font-weight:700;color:var(--navy-mid)}
+.twrap{overflow-x:auto;max-height:560px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:.76rem}
+thead th{background:var(--navy);color:var(--white);padding:7px 10px;
+  text-align:left;font-weight:600;font-size:.68rem;letter-spacing:.25px;
+  white-space:nowrap;position:sticky;top:0;z-index:2;
+  border-right:1px solid rgba(255,255,255,.06)}
+tbody tr:nth-child(even){background:var(--off)}
+tbody tr:hover{background:#e8edf8}
+td{padding:5px 10px;border-bottom:1px solid var(--g100);
+  white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis}
+td.mc{font-family:var(--mono);font-size:.72rem}
+td.hit{background:#fef9e0!important;font-weight:600;color:var(--navy);
+  font-family:var(--mono);font-size:.72rem}
+/* HTS code cell styling in "All HTS" column */
+td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:350px}
+.hts-token{display:inline-block;padding:1px 5px;border-radius:3px;
+  margin:1px 2px;font-size:.68rem;font-weight:600}
+.ht-match{background:#fef3c7;color:#92400e}
+.ht-plain{background:var(--g100);color:var(--g600)}
+
+/* EMPTY STATE */
+.empty{padding:46px;text-align:center;color:var(--g300)}
+.empty .ei{font-size:2.2rem;margin-bottom:8px}
+.empty .et{font-size:.85rem}
+
+/* SPINNER */
+.spin{display:inline-block;width:13px;height:13px;
+  border:2px solid rgba(255,255,255,.3);border-top-color:white;
+  border-radius:50%;animation:spn .7s linear infinite}
+@keyframes spn{to{transform:rotate(360deg)}}
+
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="logo">IFF</div>
+    <div>
+      <div class="hdr-title">Trimika Entry HTS Search</div>
+      <div class="hdr-sub">Sec 122 · Sec 310 · Sec 232 · IEEPA · Chapter 1–97</div>
+    </div>
+  </div>
+  <div class="hdr-pills">
+    <span class="pill p-amber">Customs</span>
+    <span class="pill p-teal">Multi-HTS</span>
+    <span class="pill p-gray" id="hdrEntries" style="display:none"></span>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-badge hidden" id="hdrBadge">
+      <div class="hb-main" id="hdrRows"></div>
+      <div class="hb-sub" id="hdrSrc"></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ── DATA SOURCE ── -->
+<div class="card">
+  <div class="ch">
+    <div class="ch-left">📂 Data Source</div>
+    <span class="cfg-link" onclick="toggleCfg()" id="cfgLink">⚙ Configure GitHub</span>
+  </div>
+
+  <div id="cfgPanel" class="hidden">
+    <div class="cb">
+      <div class="g4" style="margin-bottom:10px">
+        <div><label class="lbl">GitHub Owner / Org</label>
+          <input type="text" id="ghOwner" placeholder="e.g. iffinc-ga"></div>
+        <div><label class="lbl">Repository</label>
+          <input type="text" id="ghRepo" placeholder="e.g. iff-tools-data"></div>
+        <div><label class="lbl">File Path in Repo</label>
+          <input type="text" id="ghPath" placeholder="data/trimika_data.xlsx"></div>
+        <div><label class="lbl">Branch</label>
+          <input type="text" id="ghBranch" placeholder="main"></div>
+      </div>
+      <div class="g2" style="align-items:end">
+        <div>
+          <label class="lbl">Personal Access Token (private repos)</label>
+          <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxx">
+          <div class="tok-note">🔒 Saved in your browser only — never sent anywhere except GitHub API.</div>
+        </div>
+        <div class="row">
+          <button class="btn btn-navy" onclick="saveCfg()">💾 Save Config</button>
+          <span id="saveMsg" class="hidden"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cb">
+    <div class="row-c" style="flex-wrap:wrap;gap:10px">
+      <!-- Auto-load status -->
+      <div id="loadMsg" style="flex:1;min-width:200px"></div>
+      <!-- Manual upload fallback -->
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span style="font-size:.75rem;color:var(--g400)">Need a different date range?</span>
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+          📎 Upload XLSX
+          <input type="file" accept=".xlsx,.xls" id="fileIn" class="hidden" onchange="handleUpload(event)">
+        </label>
+      </div>
+    </div>
+
+    <!-- Date coverage notice -->
+    <div class="alert a-info" style="margin-top:11px;font-size:.78rem">
+      📅 <strong>Data coverage:</strong> Entry dates <strong>01/01/2025</strong> through
+      <strong id="yesterdayLabel"></strong>.
+      To search outside this range, upload an XLSX in the same format.
+    </div>
+
+    <div id="dataStats" class="hidden">
+      <div class="chips">
+        <div class="chip"><strong id="stRows">0</strong> rows</div>
+        <div class="chip">Entry dates: <strong id="stDates">—</strong></div>
+        <div class="chip">Importers: <strong id="stImporters">—</strong></div>
+        <div class="chip">Rows with additional tariffs: <strong id="stExtra">—</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SEARCH ── -->
+<div class="card">
+  <div class="ch">
+    <div class="ch-left">🔍 HTS Code Search</div>
+    <span style="font-size:.68rem;color:rgba(255,255,255,.45)">
+      Enter codes without dots · searches HTS NO + all Additional Tariffs · up to 5 codes
+    </span>
+  </div>
+  <div class="cb">
+    <div style="display:grid;grid-template-columns:1fr 270px;gap:18px;align-items:start">
+
+      <!-- HTS inputs -->
+      <div>
+        <label class="lbl" style="margin-bottom:7px">HTS Codes (no dots required)</label>
+        <div class="hts-list" id="htsList">
+          <div class="hts-row" data-idx="0">
+            <span class="htag t-other" id="tag0">—</span>
+            <input type="text" class="mono hts-input" id="hts0"
+              placeholder="e.g. 990388015 or 9903 or 72089010"
+              oninput="onHtsIn(this,0)" onkeydown="onHtsKey(event)">
+            <button class="bx" onclick="clearHts(0)" title="Clear">✕</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="addHts()" id="btnAddHts" style="margin-top:8px">
+          + Add Code
+        </button>
+        <div style="font-size:.68rem;color:var(--g400);margin-top:6px;line-height:1.6">
+          Dots are optional — <span class="mono" style="font-size:.68rem">990388015</span> and
+          <span class="mono" style="font-size:.68rem">9903.88.015</span> both work.
+          Prefix search: <span class="mono" style="font-size:.68rem">9903</span> matches all IEEPA codes.
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div style="display:flex;flex-direction:column;gap:13px">
+        <div>
+          <label class="lbl">Entry Date Range (optional)</label>
+          <div style="display:flex;gap:7px;align-items:center">
+            <input type="date" id="dfrom" style="flex:1;font-size:.78rem;padding:6px 8px">
+            <span style="font-size:.72rem;color:var(--g400)">–</span>
+            <input type="date" id="dto"   style="flex:1;font-size:.78rem;padding:6px 8px">
+          </div>
+          <div style="font-size:.67rem;color:var(--g400);margin-top:3px">
+            Leave blank to search all dates (1/1/2025 – yesterday)
+          </div>
+        </div>
+        <div class="row-c">
+          <button class="btn btn-amber" onclick="doSearch()">🔍 Search</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearSearch()">✕ Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RESULTS ── -->
+<div class="card">
+  <div class="ch">
+    <div class="ch-left">
+      📋 Results
+      <span id="rcLabel" style="font-weight:400;opacity:.6;font-size:.72rem"></span>
+    </div>
+    <button class="btn btn-green btn-sm hidden" id="btnDl" onclick="dlXlsx()">⬇ Download XLSX</button>
+  </div>
+  <div id="resultsBody">
+    <div class="empty">
+      <div class="ei">🔎</div>
+      <div class="et">Load data and run a search to see results here.</div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════
+// EXACT COLUMN NAMES FROM THE XLSX
+// ═══════════════════════════════════════════════════
+const C = {
+  ref:        'REFERENCE NO',
+  entry:      'ENTRY NUMBER',
+  it:         'IT NUMBER',
+  hts:        'HTS NO',
+  htsDesc:    'HTS NO DESCRIPTION',
+  line:       '7501 LINE #',
+  primTariff: 'Primary Tariff',
+  addlTariff: 'ADDITIONAL TARIFFS',
+  importer:   'IMPORTER NAME',
+  importCode: 'IMPORTER CODE',
+  importEin:  'IMPORTER EIN',
+  importDate: 'IMPORT DATE',
+  entryDate:  'ENTRY DATE',
+  mfr:        'MANUFACTURE NAME',
+  mfrChb:     'CHB MANUFACTURER NAME',
+  export:     'EXPORT DATE',
+};
+
+// Display columns for table + XLSX export (in order)
+const DISP_COLS = [
+  { label:'IFF Reference',        key:'ref'        },
+  { label:'Entry Number',         key:'entry'      },
+  { label:'Importer Name',        key:'importer'   },
+  { label:'Descartes ID',         key:'importCode' },
+  { label:'Importer EIN/CAN',     key:'importEin'  },
+  { label:'Entry Line #',         key:'line'       },
+  { label:'HTS No',               key:'hts'        },
+  { label:'HTS Description',      key:'htsDesc'    },
+  { label:'Additional Tariffs',   key:'addlTariff' },
+  { label:'Manufacturer',         key:'mfr'        },
+  { label:'Entry Date',           key:'entryDate'  },
+  { label:'Arrival Date',         key:'importDate' },
+  { label:'IT Number',            key:'it'         },
+  { label:'Export Date',          key:'export'     },
+];
+
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+let allRows = [], filtered = [], dataLoaded = false, htsCount = 1;
+
+// ═══════════════════════════════════════════════════
+// STRIP DOTS (normalize HTS for comparison)
+// ═══════════════════════════════════════════════════
+const nd = s => String(s || '').replace(/\./g, '').trim().toLowerCase();
+
+// All HTS codes from a row (primary + each comma-split additional)
+function rowCodes(row) {
+  const codes = [];
+  const h = nd(row[C.hts]);
+  if (h) codes.push(h);
+  const addl = String(row[C.addlTariff] || '');
+  addl.split(',').map(s => nd(s)).filter(Boolean).forEach(c => codes.push(c));
+  return [...new Set(codes)]; // dedupe
+}
+
+// ═══════════════════════════════════════════════════
+// GITHUB CONFIG
+// ═══════════════════════════════════════════════════
+function toggleCfg() {
+  const p = document.getElementById('cfgPanel');
+  const hidden = p.classList.toggle('hidden');
+  document.getElementById('cfgLink').textContent = hidden ? '⚙ Configure GitHub' : '▲ Hide Config';
+  if (!hidden) loadCfgFields();
+}
+function loadCfgFields() {
+  document.getElementById('ghOwner').value  = ls('tri_owner')  || '';
+  document.getElementById('ghRepo').value   = ls('tri_repo')   || '';
+  document.getElementById('ghPath').value   = ls('tri_path')   || 'data/trimika_data.xlsx';
+  document.getElementById('ghBranch').value = ls('tri_branch') || 'main';
+  document.getElementById('ghToken').value  = ls('tri_token')  || '';
+}
+function saveCfg() {
+  lss('tri_owner',  document.getElementById('ghOwner').value.trim());
+  lss('tri_repo',   document.getElementById('ghRepo').value.trim());
+  lss('tri_path',   document.getElementById('ghPath').value.trim());
+  lss('tri_branch', document.getElementById('ghBranch').value.trim() || 'main');
+  lss('tri_token',  document.getElementById('ghToken').value.trim());
+  const el = document.getElementById('saveMsg');
+  el.innerHTML = '<span class="alert a-ok" style="padding:3px 9px">✓ Saved</span>';
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2500);
+}
+const ls  = k => localStorage.getItem(k);
+const lss = (k,v) => localStorage.setItem(k,v);
+
+// ═══════════════════════════════════════════════════
+// LOAD DATA
+// ═══════════════════════════════════════════════════
+async function loadGH() {
+  const owner  = ls('tri_owner')  || '';
+  const repo   = ls('tri_repo')   || '';
+  const path   = ls('tri_path')   || 'data/trimika_data.xlsx';
+  const branch = ls('tri_branch') || 'main';
+  const token  = ls('tri_token')  || '';
+  if (!owner || !repo) {
+    setMsg('<span class="alert a-warn">⚠ GitHub not configured yet — click <strong>⚙ Configure GitHub</strong> (top right of this panel) to set your repo.</span>');
+    return;
+  }
+  setMsg('<span style="font-size:.8rem;color:var(--g400)"><span class="spin" style="border-top-color:var(--navy-mid);border-color:var(--g200)"></span> Loading data from GitHub…</span>');
+  try {
+    let ab;
+    if (token) {
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`,
+        { headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3.raw' } });
+      if (!res.ok) throw new Error(`GitHub API ${res.status}: ${res.statusText}`);
+      ab = await res.arrayBuffer();
+    } else {
+      const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}?t=${Date.now()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status} — repo may be private; add a token in ⚙ Configure GitHub`);
+      ab = await res.arrayBuffer();
+    }
+    parseXlsx(ab, `${repo} / ${path}`);
+  } catch(e) {
+    setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
+  }
+}
+
+function handleUpload(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => parseXlsx(ev.target.result, f.name);
+  r.readAsArrayBuffer(f);
+  e.target.value = '';
+}
+
+function parseXlsx(ab, src) {
+  try {
+    const wb = XLSX.read(new Uint8Array(ab), { type:'array', cellDates:true, dateNF:'mm/dd/yyyy' });
+    // Use first sheet (should be wy_trimika_tool)
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+    if (!raw.length) { setMsg('<span class="alert a-warn">⚠ File appears empty.</span>'); return; }
+
+    allRows = raw; filtered = []; dataLoaded = true;
+
+    // Stats
+    document.getElementById('stRows').textContent = raw.length.toLocaleString();
+    const edates = raw.map(r => r[C.entryDate]).filter(Boolean).sort();
+    if (edates.length)
+      document.getElementById('stDates').textContent = `${edates[0]} – ${edates[edates.length-1]}`;
+    const uniqImp = new Set(raw.map(r => r[C.importer]).filter(Boolean));
+    document.getElementById('stImporters').textContent = uniqImp.size.toLocaleString();
+    const withExtra = raw.filter(r => r[C.addlTariff]).length;
+    document.getElementById('stExtra').textContent = withExtra.toLocaleString();
+    document.getElementById('dataStats').classList.remove('hidden');
+
+    // Header badge
+    document.getElementById('hdrBadge').classList.remove('hidden');
+    document.getElementById('hdrRows').textContent = raw.length.toLocaleString() + ' rows';
+    document.getElementById('hdrSrc').textContent = src;
+    document.getElementById('hdrEntries').textContent = raw.length.toLocaleString() + ' rows';
+    document.getElementById('hdrEntries').style.display = '';
+
+    setMsg(`<span class="alert a-ok">✓ Loaded ${raw.length.toLocaleString()} rows</span>`);
+  } catch(e) {
+    setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// HTS INPUT MANAGEMENT
+// ═══════════════════════════════════════════════════
+function htsTag(raw) {
+  const v = nd(raw);
+  if (!v) return { lbl:'—', cls:'t-other' };
+  if (v.startsWith('990303')) return { lbl:'Sec 122', cls:'t-122' };
+  if (v.startsWith('990331')) return { lbl:'Sec 310', cls:'t-310' };
+  if (v.startsWith('9903'))   return { lbl:'IEEPA',   cls:'t-ieepa' };
+  if (v.startsWith('99'))     return { lbl:'Ch 99',   cls:'t-ieepa' };
+  const ch = parseInt(v.slice(0,2), 10);
+  if (ch >= 72 && ch <= 83)   return { lbl:'Sec 232', cls:'t-232' };
+  if (ch >= 1  && ch <= 97)   return { lbl:'Ch 1–97', cls:'t-ch97' };
+  return { lbl:'—', cls:'t-other' };
+}
+
+function onHtsIn(inp, idx) {
+  const t = htsTag(inp.value);
+  const el = document.getElementById(`tag${idx}`);
+  el.textContent = t.lbl; el.className = `htag ${t.cls}`;
+}
+
+function onHtsKey(e) { if (e.key === 'Enter') addHts(); }
+
+function addHts() {
+  if (htsCount >= 5) return;
+  const list = document.getElementById('htsList');
+  const idx = htsCount++;
+  const div = document.createElement('div');
+  div.className = 'hts-row'; div.dataset.idx = idx;
+  div.innerHTML = `
+    <span class="htag t-other" id="tag${idx}">—</span>
+    <input type="text" class="mono hts-input" id="hts${idx}"
+      placeholder="e.g. 990301 or 72083600"
+      oninput="onHtsIn(this,${idx})" onkeydown="onHtsKey(event)">
+    <button class="bx" onclick="removeHts(${idx})" title="Remove">✕</button>`;
+  list.appendChild(div);
+  document.getElementById(`hts${idx}`).focus();
+  if (htsCount >= 5) document.getElementById('btnAddHts').disabled = true;
+}
+
+function clearHts(idx) {
+  const inp = document.getElementById(`hts${idx}`);
+  inp.value = ''; onHtsIn(inp, idx);
+}
+
+function removeHts(idx) {
+  const list = document.getElementById('htsList');
+  if (list.children.length <= 1) { clearHts(idx); return; }
+  document.querySelector(`.hts-row[data-idx="${idx}"]`)?.remove();
+  htsCount = list.children.length;
+  document.getElementById('btnAddHts').disabled = false;
+}
+
+function getSearchCodes() {
+  return Array.from(document.querySelectorAll('.hts-input'))
+    .map(i => nd(i.value)).filter(Boolean);
+}
+
+// ═══════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════
+function doSearch() {
+  if (!dataLoaded) { setMsg('<span class="alert a-warn">⚠ Data is still loading — please wait.</span>'); return; }
+  const codes = getSearchCodes();
+  if (!codes.length) {
+    showEmpty('⚠️', 'Enter at least one HTS code to search.'); return;
+  }
+  const dfrom = document.getElementById('dfrom').value;
+  const dto   = document.getElementById('dto').value;
+
+  filtered = allRows.filter(row => {
+    if (dfrom || dto) {
+      const d = new Date(row[C.entryDate]);
+      if (!isNaN(d)) {
+        if (dfrom && d < new Date(dfrom))              return false;
+        if (dto   && d > new Date(dto + 'T23:59:59')) return false;
+      }
+    }
+    // ANY match — at least one search code matches any HTS code in the row
+    const rc = rowCodes(row);
+    return codes.some(code =>
+      rc.some(c => c.startsWith(code) || code.startsWith(c.slice(0, code.length)))
+    );
+  });
+
+  renderTable(filtered, codes);
+}
+
+function clearSearch() {
+  const list = document.getElementById('htsList');
+  Array.from(list.querySelectorAll('.hts-row')).forEach((r, i) => {
+    if (i === 0) clearHts(0);
+    else r.remove();
+  });
+  htsCount = 1;
+  document.getElementById('btnAddHts').disabled = false;
+  document.getElementById('dfrom').value = '';
+  document.getElementById('dto').value = '';
+  filtered = [];
+  document.getElementById('rcLabel').textContent = '';
+  document.getElementById('btnDl').classList.add('hidden');
+  showEmpty('🔎', 'Load data and run a search to see results here.');
+}
+
+// ═══════════════════════════════════════════════════
+// RENDER TABLE
+// ═══════════════════════════════════════════════════
+function renderTable(rows, matchCodes) {
+  const n = rows.length;
+  document.getElementById('rcLabel').textContent = `— ${n.toLocaleString()} row${n !== 1 ? 's' : ''}`;
+  n > 0
+    ? document.getElementById('btnDl').classList.remove('hidden')
+    : document.getElementById('btnDl').classList.add('hidden');
+
+  if (!n) {
+    showEmpty('🔍', 'No results found. Try a shorter prefix (e.g. 9903 instead of 990388015).');
+    return;
+  }
+
+  const LIMIT = 2500;
+  const display = rows.slice(0, LIMIT);
+
+  // Column header row
+  let html = '<div class="twrap"><table><thead><tr>';
+  for (const dc of DISP_COLS) html += `<th>${esc(dc.label)}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const row of display) {
+    html += '<tr>';
+    for (const dc of DISP_COLS) {
+      const val = String(row[C[dc.key]] ?? '');
+
+      if (dc.key === 'addlTariff') {
+        // Render each comma-separated code as a colored token
+        const tokens = val.split(',').map(s => s.trim()).filter(Boolean);
+        if (!tokens.length) { html += '<td></td>'; continue; }
+        let inner = '';
+        for (const tok of tokens) {
+          const tokNd = nd(tok);
+          const isHit = matchCodes.some(c => tokNd.startsWith(c) || c.startsWith(tokNd.slice(0,c.length)));
+          inner += `<span class="hts-token ${isHit ? 'ht-match' : 'ht-plain'}">${esc(tok)}</span>`;
+        }
+        html += `<td class="hts-cell" title="${esc(val)}">${inner}</td>`;
+
+      } else if (dc.key === 'hts') {
+        const vNd = nd(val);
+        const isHit = val && matchCodes.some(c => vNd.startsWith(c) || c.startsWith(vNd.slice(0,c.length)));
+        html += `<td class="${isHit ? 'hit' : 'mc'}" title="${esc(val)}">${esc(val)}</td>`;
+
+      } else {
+        const mono = ['entry','it','importEin','importCode','line','primTariff'].includes(dc.key);
+        html += `<td class="${mono ? 'mc' : ''}" title="${esc(val)}">${esc(val)}</td>`;
+      }
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div>';
+
+  if (rows.length > LIMIT)
+    html += `<div class="alert a-info" style="margin:10px">
+      Showing ${LIMIT.toLocaleString()} of ${rows.length.toLocaleString()} rows.
+      Download XLSX to see all ${rows.length.toLocaleString()} results.
+    </div>`;
+
+  document.getElementById('resultsBody').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════
+// DOWNLOAD XLSX
+// ═══════════════════════════════════════════════════
+function dlXlsx() {
+  if (!filtered.length) return;
+  const exportData = filtered.map(row => {
+    const out = {};
+    for (const dc of DISP_COLS) out[dc.label] = row[C[dc.key]] ?? '';
+    return out;
+  });
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  // Navy header styling
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  for (let ci = range.s.c; ci <= range.e.c; ci++) {
+    const a = XLSX.utils.encode_cell({ r:0, c:ci });
+    if (ws[a]) ws[a].s = {
+      fill: { fgColor:{ rgb:'0F2545' } },
+      font: { bold:true, color:{ rgb:'FFFFFF' } }
+    };
+  }
+  ws['!cols'] = DISP_COLS.map(() => ({ wch:22 }));
+  XLSX.utils.book_append_sheet(wb, ws, 'HTS Search Results');
+  const codes = getSearchCodes().join('-') || 'results';
+  const today = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `trimika_${codes}_${today}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════
+const esc = s => String(s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function setMsg(h)  { document.getElementById('loadMsg').innerHTML = h; }
+
+function showEmpty(icon, text) {
+  document.getElementById('resultsBody').innerHTML =
+    `<div class="empty"><div class="ei">${icon}</div><div class="et">${text}</div></div>`;
+}
+
+// Init
+loadCfgFields();
+
+// Set yesterday's date label
+const yest = new Date();
+yest.setDate(yest.getDate() - 1);
+document.getElementById('yesterdayLabel').textContent =
+  (yest.getMonth()+1).toString().padStart(2,'0') + '/' +
+  yest.getDate().toString().padStart(2,'0') + '/' +
+  yest.getFullYear();
+
+// Auto-load from GitHub
+loadGH();
+</script>
+</body>
+</html>
