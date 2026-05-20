@@ -407,7 +407,7 @@ function parseXlsx(ab, src) {
 
     // Stats
     document.getElementById('stRows').textContent = raw.length.toLocaleString();
-    const edates = raw.map(r => r[C.entryDate]).filter(Boolean).sort();
+    const edates = raw.map(r => r[C.entryDate]).filter(Boolean).sort((a,b) => new Date(a) - new Date(b));
     if (edates.length)
       document.getElementById('stDates').textContent = `${edates[0]} – ${edates[edates.length-1]}`;
     const uniqImp = new Set(raw.map(r => r[C.importer]).filter(Boolean));
