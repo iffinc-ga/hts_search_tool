@@ -99,14 +99,6 @@ input:focus{outline:none;border-color:var(--navy-lt);box-shadow:0 0 0 3px rgba(4
 .row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap}
 .row-c{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 
-/* CONFIG */
-.cfg-link{font-size:.7rem;color:rgba(255,255,255,.55);cursor:pointer;
-  text-decoration:underline;text-underline-offset:2px;transition:color .13s}
-.cfg-link:hover{color:var(--amber-lt)}
-#cfgPanel{border-top:1px solid var(--g100);background:var(--off)}
-#cfgPanel .cb{padding:13px 16px}
-.tok-note{font-size:.68rem;color:var(--g400);margin-top:3px}
-
 /* HTS INPUTS */
 .hts-list{display:flex;flex-direction:column;gap:7px}
 .hts-row{display:flex;gap:7px;align-items:center}
@@ -210,33 +202,6 @@ td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:350px}
 <div class="card">
   <div class="ch">
     <div class="ch-left">📂 Data Source</div>
-    <span class="cfg-link" onclick="toggleCfg()" id="cfgLink">⚙ Configure GitHub</span>
-  </div>
-
-  <div id="cfgPanel" class="hidden">
-    <div class="cb">
-      <div class="g4" style="margin-bottom:10px">
-        <div><label class="lbl">GitHub Owner / Org</label>
-          <input type="text" id="ghOwner" placeholder="e.g. iffinc-ga"></div>
-        <div><label class="lbl">Repository</label>
-          <input type="text" id="ghRepo" placeholder="e.g. iff-tools-data"></div>
-        <div><label class="lbl">File Path in Repo</label>
-          <input type="text" id="ghPath" placeholder="data/trimika_data.xlsx"></div>
-        <div><label class="lbl">Branch</label>
-          <input type="text" id="ghBranch" placeholder="main"></div>
-      </div>
-      <div class="g2" style="align-items:end">
-        <div>
-          <label class="lbl">Personal Access Token (private repos)</label>
-          <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxx">
-          <div class="tok-note">🔒 Saved in your browser only — never sent anywhere except GitHub API.</div>
-        </div>
-        <div class="row">
-          <button class="btn btn-navy" onclick="saveCfg()">💾 Save Config</button>
-          <span id="saveMsg" class="hidden"></span>
-        </div>
-      </div>
-    </div>
   </div>
 
   <div class="cb">
@@ -407,62 +372,16 @@ function rowCodes(row) {
 }
 
 // ═══════════════════════════════════════════════════
-// GITHUB CONFIG
+// GITHUB — HARDCODED (no config needed)
 // ═══════════════════════════════════════════════════
-function toggleCfg() {
-  const p = document.getElementById('cfgPanel');
-  const hidden = p.classList.toggle('hidden');
-  document.getElementById('cfgLink').textContent = hidden ? '⚙ Configure GitHub' : '▲ Hide Config';
-  if (!hidden) loadCfgFields();
-}
-function loadCfgFields() {
-  document.getElementById('ghOwner').value  = ls('tri_owner')  || '';
-  document.getElementById('ghRepo').value   = ls('tri_repo')   || '';
-  document.getElementById('ghPath').value   = ls('tri_path')   || 'data/trimika_data.xlsx';
-  document.getElementById('ghBranch').value = ls('tri_branch') || 'main';
-  document.getElementById('ghToken').value  = ls('tri_token')  || '';
-}
-function saveCfg() {
-  lss('tri_owner',  document.getElementById('ghOwner').value.trim());
-  lss('tri_repo',   document.getElementById('ghRepo').value.trim());
-  lss('tri_path',   document.getElementById('ghPath').value.trim());
-  lss('tri_branch', document.getElementById('ghBranch').value.trim() || 'main');
-  lss('tri_token',  document.getElementById('ghToken').value.trim());
-  const el = document.getElementById('saveMsg');
-  el.innerHTML = '<span class="alert a-ok" style="padding:3px 9px">✓ Saved</span>';
-  el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('hidden'), 2500);
-}
-const ls  = k => localStorage.getItem(k);
-const lss = (k,v) => localStorage.setItem(k,v);
+const GH_URL = 'https://raw.githubusercontent.com/iffinc-ga/hts_search_tool/main/trimika_data.xlsx';
 
-// ═══════════════════════════════════════════════════
-// LOAD DATA
-// ═══════════════════════════════════════════════════
 async function loadGH() {
-  const owner  = ls('tri_owner')  || '';
-  const repo   = ls('tri_repo')   || '';
-  const path   = ls('tri_path')   || 'data/trimika_data.xlsx';
-  const branch = ls('tri_branch') || 'main';
-  const token  = ls('tri_token')  || '';
-  if (!owner || !repo) {
-    setMsg('<span class="alert a-warn">⚠ GitHub not configured yet — click <strong>⚙ Configure GitHub</strong> (top right of this panel) to set your repo.</span>');
-    return;
-  }
-  setMsg('<span style="font-size:.8rem;color:var(--g400)"><span class="spin" style="border-top-color:var(--navy-mid);border-color:var(--g200)"></span> Loading data from GitHub…</span>');
+  setMsg('<span style="font-size:.8rem;color:var(--g400)"><span class="spin" style="border-top-color:var(--navy-mid);border-color:var(--g200)"></span> Loading data…</span>');
   try {
-    let ab;
-    if (token) {
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`,
-        { headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3.raw' } });
-      if (!res.ok) throw new Error(`GitHub API ${res.status}: ${res.statusText}`);
-      ab = await res.arrayBuffer();
-    } else {
-      const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}?t=${Date.now()}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status} — repo may be private; add a token in ⚙ Configure GitHub`);
-      ab = await res.arrayBuffer();
-    }
-    parseXlsx(ab, `${repo} / ${path}`);
+    const res = await fetch(GH_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error(`Could not load data file (HTTP ${res.status})`);
+    parseXlsx(await res.arrayBuffer(), 'trimika_data.xlsx');
   } catch(e) {
     setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
   }
@@ -722,8 +641,6 @@ function showEmpty(icon, text) {
 }
 
 // Init
-loadCfgFields();
-
 // Set yesterday's date label
 const yest = new Date();
 yest.setDate(yest.getDate() - 1);
