@@ -155,9 +155,10 @@ td.mc{font-family:var(--mono);font-size:.72rem}
 td.hit{background:#fef9e0!important;font-weight:600;color:var(--navy);
   font-family:var(--mono);font-size:.72rem}
 /* HTS code cell styling in "All HTS" column */
-td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:350px}
-.hts-token{display:inline-block;padding:1px 5px;border-radius:3px;
-  margin:1px 2px;font-size:.68rem;font-weight:600}
+td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:400px;white-space:normal;line-height:1.8}
+.hts-token{display:inline-block;padding:1px 6px;border-radius:3px;
+  margin:1px 1px;font-size:.68rem;font-weight:600}
+.hts-sep{font-size:.68rem;color:var(--g300);font-family:var(--mono)}
 .ht-match{background:#fef3c7;color:#92400e}
 .ht-plain{background:var(--g100);color:var(--g600)}
 
@@ -680,15 +681,16 @@ function renderTable(rows, matchCodes) {
       const val = String(row[C[dc.key]] ?? '');
 
       if (dc.key === 'addlTariff') {
-        // Render each comma-separated code as a colored token
+        // Render each comma-separated code as a colored token with space between
         const tokens = val.split(',').map(s => s.trim()).filter(Boolean);
         if (!tokens.length) { html += '<td></td>'; continue; }
         let inner = '';
-        for (const tok of tokens) {
+        tokens.forEach((tok, i) => {
           const tokNd = nd(tok);
           const isHit = matchCodes.some(c => tokNd.startsWith(c) || c.startsWith(tokNd.slice(0,c.length)));
           inner += `<span class="hts-token ${isHit ? 'ht-match' : 'ht-plain'}">${esc(tok)}</span>`;
-        }
+          if (i < tokens.length - 1) inner += `<span class="hts-sep">,&nbsp;</span>`;
+        });
         html += `<td class="hts-cell" title="${esc(val)}">${inner}</td>`;
 
       } else if (dc.key === 'hts') {
@@ -722,7 +724,14 @@ function dlXlsx() {
   if (!filtered.length) return;
   const exportData = filtered.map(row => {
     const out = {};
-    for (const dc of DISP_COLS) out[dc.label] = row[C[dc.key]] ?? '';
+    for (const dc of DISP_COLS) {
+      let val = row[C[dc.key]] ?? '';
+      // Add space after commas for readability in XLSX
+      if (dc.key === 'addlTariff' && val) {
+        val = String(val).split(',').map(s => s.trim()).join(',  ');
+      }
+      out[dc.label] = val;
+    }
     return out;
   });
   const wb = XLSX.utils.book_new();
