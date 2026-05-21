@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Entry HTS Search · IFF</title>
+<title>Trimika · Entry HTS Search · IFF</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -107,10 +107,12 @@ input:focus{outline:none;border-color:var(--navy-lt);box-shadow:0 0 0 3px rgba(4
   border-radius:3px;text-transform:uppercase;white-space:nowrap;
   flex-shrink:0;min-width:66px;text-align:center}
 .t-ieepa{background:#fee2e2;color:#991b1b}
+.t-301  {background:#ffe4cc;color:#7c2d12}
 .t-232  {background:#fef3c7;color:#92400e}
 .t-310  {background:#ede9fe;color:#5b21b6}
 .t-122  {background:#d1fae5;color:#065f46}
 .t-ch97 {background:#e0f2fe;color:#0c4a6e}
+.t-ch99 {background:#f1f5f9;color:#475569}
 .t-other{background:var(--g100);color:var(--g600)}
 
 /* MATCH TOGGLE */
@@ -378,14 +380,44 @@ function rowCodes(row) {
 // ═══════════════════════════════════════════════════
 // GITHUB — HARDCODED (no config needed)
 // ═══════════════════════════════════════════════════
-const GH_URL = 'https://raw.githubusercontent.com/iffinc-ga/hts_search_tool/main/trimika_data.xlsx';
+const GH_BASE   = 'https://raw.githubusercontent.com/iffinc-ga/hts_search_tool/main/';
+const GH_FILES  = [
+  { url: GH_BASE + 'trimika_2025.xlsx',  label: '2025 archive' },
+  { url: GH_BASE + 'trimika_data.xlsx',  label: 'current data' },
+];
 
 async function loadGH() {
   setMsg('<span style="font-size:.8rem;color:var(--g400)"><span class="spin" style="border-top-color:var(--navy-mid);border-color:var(--g200)"></span> Loading data…</span>');
   try {
-    const res = await fetch(GH_URL + '?t=' + Date.now());
-    if (!res.ok) throw new Error(`Could not load data file (HTTP ${res.status})`);
-    parseXlsx(await res.arrayBuffer(), 'trimika_data.xlsx');
+    // Fetch both files in parallel
+    const results = await Promise.allSettled(
+      GH_FILES.map(f => fetch(f.url + '?t=' + Date.now()).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.arrayBuffer();
+      }))
+    );
+
+    let combinedRows = [];
+    const loaded = [], failed = [];
+
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        const rows = parseXlsxToRows(r.value);
+        combinedRows = combinedRows.concat(rows);
+        loaded.push(`${GH_FILES[i].label} (${rows.length.toLocaleString()} rows)`);
+      } else {
+        failed.push(GH_FILES[i].label);
+      }
+    });
+
+    if (!combinedRows.length) throw new Error('No data loaded from either file');
+
+    applyRows(combinedRows, loaded.join(' + '));
+
+    if (failed.length) {
+      setMsg(`<span class="alert a-warn">⚠ Loaded ${loaded.join(' + ')} · Could not load: ${failed.join(', ')}</span>`);
+    }
+
   } catch(e) {
     setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
   }
@@ -399,35 +431,43 @@ function handleUpload(e) {
   e.target.value = '';
 }
 
+// Parse an ArrayBuffer → array of row objects (throws on error)
+function parseXlsxToRows(ab) {
+  const wb = XLSX.read(new Uint8Array(ab), { type:'array', cellDates:true, dateNF:'mm/dd/yyyy' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+}
+
+// Apply a combined row array to state and refresh UI
+function applyRows(rows, src) {
+  if (!rows.length) { setMsg('<span class="alert a-warn">⚠ File appears empty.</span>'); return; }
+
+  allRows = rows; filtered = []; dataLoaded = true;
+
+  document.getElementById('stRows').textContent = rows.length.toLocaleString();
+  const edates = rows.map(r => r[C.entryDate]).filter(Boolean).sort((a,b) => new Date(a) - new Date(b));
+  if (edates.length)
+    document.getElementById('stDates').textContent = `${edates[0]} – ${edates[edates.length-1]}`;
+  const uniqImp = new Set(rows.map(r => r[C.importer]).filter(Boolean));
+  document.getElementById('stImporters').textContent = uniqImp.size.toLocaleString();
+  const withExtra = rows.filter(r => r[C.addlTariff]).length;
+  document.getElementById('stExtra').textContent = withExtra.toLocaleString();
+  document.getElementById('dataStats').classList.remove('hidden');
+
+  document.getElementById('hdrBadge').classList.remove('hidden');
+  document.getElementById('hdrRows').textContent = rows.length.toLocaleString() + ' rows';
+  document.getElementById('hdrSrc').textContent = src;
+  document.getElementById('hdrEntries').textContent = rows.length.toLocaleString() + ' rows';
+  document.getElementById('hdrEntries').style.display = '';
+
+  setMsg(`<span class="alert a-ok">✓ ${rows.length.toLocaleString()} rows loaded — ${src}</span>`);
+}
+
+// Single-file upload path (replaces all data with uploaded file)
 function parseXlsx(ab, src) {
   try {
-    const wb = XLSX.read(new Uint8Array(ab), { type:'array', cellDates:true, dateNF:'mm/dd/yyyy' });
-    // Use first sheet (should be wy_trimika_tool)
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const raw = XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
-    if (!raw.length) { setMsg('<span class="alert a-warn">⚠ File appears empty.</span>'); return; }
-
-    allRows = raw; filtered = []; dataLoaded = true;
-
-    // Stats
-    document.getElementById('stRows').textContent = raw.length.toLocaleString();
-    const edates = raw.map(r => r[C.entryDate]).filter(Boolean).sort((a,b) => new Date(a) - new Date(b));
-    if (edates.length)
-      document.getElementById('stDates').textContent = `${edates[0]} – ${edates[edates.length-1]}`;
-    const uniqImp = new Set(raw.map(r => r[C.importer]).filter(Boolean));
-    document.getElementById('stImporters').textContent = uniqImp.size.toLocaleString();
-    const withExtra = raw.filter(r => r[C.addlTariff]).length;
-    document.getElementById('stExtra').textContent = withExtra.toLocaleString();
-    document.getElementById('dataStats').classList.remove('hidden');
-
-    // Header badge
-    document.getElementById('hdrBadge').classList.remove('hidden');
-    document.getElementById('hdrRows').textContent = raw.length.toLocaleString() + ' rows';
-    document.getElementById('hdrSrc').textContent = src;
-    document.getElementById('hdrEntries').textContent = raw.length.toLocaleString() + ' rows';
-    document.getElementById('hdrEntries').style.display = '';
-
-    setMsg(`<span class="alert a-ok">✓ Loaded ${raw.length.toLocaleString()} rows</span>`);
+    const rows = parseXlsxToRows(ab);
+    applyRows(rows, src);
   } catch(e) {
     setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
   }
@@ -436,23 +476,75 @@ function parseXlsx(ab, src) {
 // ═══════════════════════════════════════════════════
 // HTS INPUT MANAGEMENT
 // ═══════════════════════════════════════════════════
+// ── HTS prefix → label for search input tags ──────────────────
+// Based on CBP Chapter 99 structure. Description column in results
+// always shows the actual HTS NO DESCRIPTION from the data.
 function htsTag(raw) {
   const v = nd(raw);
   if (!v) return { lbl:'—', cls:'t-other' };
-  if (v.startsWith('990303')) return { lbl:'Sec 122', cls:'t-122' };
-  if (v.startsWith('990331')) return { lbl:'Sec 310', cls:'t-310' };
-  if (v.startsWith('9903'))   return { lbl:'IEEPA',   cls:'t-ieepa' };
-  if (v.startsWith('99'))     return { lbl:'Ch 99',   cls:'t-ieepa' };
+
+  // ── Chapter 99 codes ───────────────────────────────────────────
+  if (v.startsWith('990303'))             return { lbl:'Sec 122',  cls:'t-122'   }; // imports surcharge
+  if (v.startsWith('990331'))             return { lbl:'Sec 310',  cls:'t-310'   }; // USMCA/MFN
+  if (v.startsWith('990388'))             return { lbl:'Sec 301',  cls:'t-301'   }; // China tariffs
+  if (v.startsWith('99038'))              return { lbl:'Sec 301',  cls:'t-301'   }; // China tariffs (other)
+  if (v.startsWith('990301') ||
+      v.startsWith('990302'))             return { lbl:'IEEPA',    cls:'t-ieepa' }; // IEEPA specific
+  if (v.startsWith('9903'))              return { lbl:'Ch 99',    cls:'t-ch99'  }; // other Ch 99
+
+  // ── Section 232 (steel & aluminum) ────────────────────────────
+  if (v.startsWith('990401') ||
+      v.startsWith('990402') ||
+      v.startsWith('990403') ||
+      v.startsWith('990404') ||
+      v.startsWith('990411') ||
+      v.startsWith('990412') ||
+      v.startsWith('990413') ||
+      v.startsWith('990414') ||
+      v.startsWith('990415') ||
+      v.startsWith('990416') ||
+      v.startsWith('990417') ||
+      v.startsWith('990418') ||
+      v.startsWith('990419') ||
+      v.startsWith('990420') ||
+      v.startsWith('990480') ||
+      v.startsWith('990481') ||
+      v.startsWith('990482'))            return { lbl:'Sec 232',  cls:'t-232'   };
+  if (v.startsWith('9904'))              return { lbl:'Sec 232',  cls:'t-232'   }; // Sec 232 catch-all
+
+  if (v.startsWith('99'))                return { lbl:'Ch 99',    cls:'t-ch99'  }; // other Ch 99
+
+  // ── Regular chapters ──────────────────────────────────────────
   const ch = parseInt(v.slice(0,2), 10);
-  if (ch >= 72 && ch <= 83)   return { lbl:'Sec 232', cls:'t-232' };
-  if (ch >= 1  && ch <= 97)   return { lbl:'Ch 1–97', cls:'t-ch97' };
+  if (ch >= 1 && ch <= 97)               return { lbl:'Ch 1–97',  cls:'t-ch97'  };
   return { lbl:'—', cls:'t-other' };
 }
 
+// Look up description from loaded data for a given HTS code (stripped of dots)
+function lookupDesc(codeNd) {
+  if (!codeNd || !allRows.length) return null;
+  const row = allRows.find(r => nd(r[C.hts]) === codeNd ||
+    String(r[C.addlTariff]||'').split(',').map(s=>nd(s)).includes(codeNd));
+  return row ? (row[C.htsDesc] || null) : null;
+}
+
 function onHtsIn(inp, idx) {
-  const t = htsTag(inp.value);
-  const el = document.getElementById(`tag${idx}`);
-  el.textContent = t.lbl; el.className = `htag ${t.cls}`;
+  const t   = htsTag(inp.value);
+  const el  = document.getElementById(`tag${idx}`);
+  el.textContent = t.lbl;
+  el.className   = `htag ${t.cls}`;
+  // Show description as tooltip if data is loaded and we have an exact match
+  const desc = dataLoaded ? lookupDesc(nd(inp.value)) : null;
+  el.title = desc || '';
+  // Also show description inline below the input if exact match found
+  let hint = document.getElementById(`hint${idx}`);
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = `hint${idx}`;
+    hint.style.cssText = 'font-size:.67rem;color:var(--g400);margin-top:2px;padding-left:2px;font-style:italic';
+    inp.closest('.hts-row').after(hint);
+  }
+  hint.textContent = desc || '';
 }
 
 function onHtsKey(e) { if (e.key === 'Enter') addHts(); }
