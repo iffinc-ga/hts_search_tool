@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trimika · Entry HTS Search · IFF</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -808,11 +809,33 @@ function renderTable(rows, matchCodes) {
 // ═══════════════════════════════════════════════════
 // DOWNLOAD XLSX
 // ═══════════════════════════════════════════════════
-function dlXlsx() {
+async function dlXlsx() {
   if (!filtered.length) return;
-  const exportData = filtered.map(row => {
-    const out = {};
-    for (const dc of DISP_COLS) {
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'IFF Trimika Tool';
+  const ws = wb.addWorksheet('HTS Search Results');
+
+  // ── Column definitions ──────────────────────────────────────
+  ws.columns = DISP_COLS.map(dc => ({
+    header: dc.label,
+    key:    dc.label,
+    width:  24,
+  }));
+
+  // ── Header styling ──────────────────────────────────────────
+  const hdrRow = ws.getRow(1);
+  hdrRow.height = 18;
+  hdrRow.eachCell({ includeEmpty: true }, cell => {
+    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F2545' } };
+    cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, name: 'Calibri', size: 11 };
+    cell.border    = { bottom: { style: 'medium', color: { argb: 'FFE8A020' } } };
+    cell.alignment = { vertical: 'middle', wrapText: false };
+  });
+
+  // ── Data rows ───────────────────────────────────────────────
+  filtered.forEach((row, rowIdx) => {
+    const vals = DISP_COLS.map(dc => {
       let val;
       if (dc.key === 'lineValue') {
         const edi = ediLookup(row[C.ref], row[C.line]);
@@ -820,57 +843,47 @@ function dlXlsx() {
       } else {
         val = row[C[dc.key]] ?? '';
       }
-      // Add space after commas for readability in XLSX
       if (dc.key === 'addlTariff' && val) {
         val = String(val).split(',').map(s => s.trim()).join(',  ');
       }
-      out[dc.label] = val;
-    }
-    return out;
+      return val;
+    });
+
+    const excelRow  = ws.addRow(vals);
+    excelRow.height = 15;
+    const bgArgb    = rowIdx % 2 === 0 ? 'FFEEF1F7' : 'FFFFFFFF';
+
+    excelRow.eachCell({ includeEmpty: true }, cell => {
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+      cell.font      = { name: 'Calibri', size: 10 };
+      cell.alignment = { vertical: 'middle' };
+      cell.border    = {
+        bottom: { style: 'thin', color: { argb: 'FFDDE3EE' } },
+      };
+    });
   });
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(exportData);
-  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
 
-  // Autofilter on header row
-  ws['!autofilter'] = { ref: ws['!ref'] };
+  // ── Autofilter ──────────────────────────────────────────────
+  ws.autoFilter = {
+    from: { row: 1, column: 1 },
+    to:   { row: 1, column: DISP_COLS.length },
+  };
 
-  // Column widths
-  ws['!cols'] = DISP_COLS.map(() => ({ wch: 22 }));
+  // ── Freeze header row ───────────────────────────────────────
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
 
-  // Style every cell
-  for (let ri = range.s.r; ri <= range.e.r; ri++) {
-    const isHeader = ri === 0;
-    const isEven   = ri % 2 === 0;           // row 1 (index 1) = first data row
-    for (let ci = range.s.c; ci <= range.e.c; ci++) {
-      const addr = XLSX.utils.encode_cell({ r: ri, c: ci });
-      if (!ws[addr]) ws[addr] = { v: '', t: 's' };
-      if (isHeader) {
-        ws[addr].s = {
-          fill: { patternType: 'solid', fgColor: { rgb: '0F2545' } },
-          font: { bold: true, color: { rgb: 'FFFFFF' }, name: 'Calibri', sz: 11 },
-          alignment: { vertical: 'center', wrapText: false },
-          border: {
-            bottom: { style: 'medium', color: { rgb: 'E8A020' } }
-          }
-        };
-      } else {
-        ws[addr].s = {
-          fill: {
-            patternType: 'solid',
-            fgColor: { rgb: isEven ? 'EEF1F7' : 'FFFFFF' }
-          },
-          font: { name: 'Calibri', sz: 10 },
-          alignment: { vertical: 'center' }
-        };
-      }
-    }
-  }
-
-  XLSX.utils.book_append_sheet(wb, ws, 'HTS Search Results');
+  // ── Download ────────────────────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob   = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
   const codes = getSearchCodes().join('-') || 'results';
-  const today = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `trimika_${codes}_${today}.xlsx`);
+  const today = new Date().toISOString().slice(0, 10);
+  const a     = document.createElement('a');
+  a.href      = URL.createObjectURL(blob);
+  a.download  = `trimika_${codes}_${today}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ═══════════════════════════════════════════════════
