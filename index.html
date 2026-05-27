@@ -834,6 +834,8 @@ async function dlXlsx() {
   });
 
   // ── Data rows ───────────────────────────────────────────────
+  const lineValColIdx = DISP_COLS.findIndex(dc => dc.key === 'lineValue') + 1; // 1-based column index
+
   filtered.forEach((row, rowIdx) => {
     const vals = DISP_COLS.map(dc => {
       let val;
@@ -853,13 +855,20 @@ async function dlXlsx() {
     excelRow.height = 15;
     const bgArgb    = rowIdx % 2 === 0 ? 'FFEEF1F7' : 'FFFFFFFF';
 
-    excelRow.eachCell({ includeEmpty: true }, cell => {
+    excelRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
       cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
       cell.font      = { name: 'Calibri', size: 10 };
       cell.alignment = { vertical: 'middle' };
-      cell.border    = {
-        bottom: { style: 'thin', color: { argb: 'FFDDE3EE' } },
-      };
+      cell.border    = { bottom: { style: 'thin', color: { argb: 'FFDDE3EE' } } };
+      // Format Line Value column as currency
+      if (colIdx === lineValColIdx) {
+        const num = parseFloat(String(cell.value).replace(/,/g, ''));
+        if (!isNaN(num)) {
+          cell.value    = num;
+          cell.numFmt   = '$#,##0.00';
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+        }
+      }
     });
   });
 
