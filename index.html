@@ -468,9 +468,7 @@ async function loadEdiCsvs() {
 }
 
 function parseCsv(text) {
-  const lines = text.split(/
-?
-/).filter(Boolean);
+  const lines = text.replace(/\r/g, '').split('\n').filter(Boolean);
   if (lines.length < 2) return [];
   // Split on comma but respect quoted fields
   const splitLine = line => {
