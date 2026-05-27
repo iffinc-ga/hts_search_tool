@@ -338,7 +338,8 @@ const C = {
   mfr:        'MANUFACTURE NAME',
   mfrChb:     'CHB MANUFACTURER NAME',
   export:     'EXPORT DATE',
-  transport:  'MODE OF TRANSPORT',
+  transport:  'MODE OF TRANSPORTATION NAME',
+  lineValue:  '_LINE_VALUE',       // populated from EDI CSV lookup
 };
 
 // Display columns for table + XLSX export (in order)
@@ -358,12 +359,14 @@ const DISP_COLS = [
   { label:'IT Number',            key:'it'         },
   { label:'Export Date',          key:'export'     },
   { label:'Mode of Transport',     key:'transport'  },
+  { label:'Line Value',            key:'lineValue'  },
 ];
 
 // ═══════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════
 let allRows = [], filtered = [], dataLoaded = false, htsCount = 1;
+let ediMap = {};   // key: fileNumber|lineNumber → enteredValue
 
 // ═══════════════════════════════════════════════════
 // STRIP DOTS (normalize HTS for comparison)
@@ -384,6 +387,10 @@ function rowCodes(row) {
 // GITHUB — HARDCODED (no config needed)
 // ═══════════════════════════════════════════════════
 const GH_BASE   = 'https://raw.githubusercontent.com/iffinc-ga/hts_search_tool/main/';
+const EDI_FILES = [
+  { url: GH_BASE + 'edi_archive.csv',  label: 'EDI archive'   },
+  { url: GH_BASE + 'edi_current.csv',  label: 'EDI current'   },
+];
 const GH_FILES  = [
   { url: GH_BASE + 'trimika_2025.xlsx',  label: '2025 archive' },
   { url: GH_BASE + 'trimika_data.xlsx',  label: 'current data' },
@@ -417,6 +424,9 @@ async function loadGH() {
 
     applyRows(combinedRows, loaded.join(' + '));
 
+    // Load EDI CSVs in background for Line Value lookup
+    loadEdiCsvs();
+
     if (failed.length) {
       setMsg(`<span class="alert a-warn">⚠ Loaded ${loaded.join(' + ')} · Could not load: ${failed.join(', ')}</span>`);
     }
@@ -434,6 +444,76 @@ function handleUpload(e) {
   e.target.value = '';
 }
 
+// ═══════════════════════════════════════════════════
+// EDI CSV LOADING & LOOKUP
+// ═══════════════════════════════════════════════════
+async function loadEdiCsvs() {
+  const results = await Promise.allSettled(
+    EDI_FILES.map(f => fetch(f.url + '?t=' + Date.now()).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    }))
+  );
+
+  let combined = [];
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') {
+      const rows = parseCsv(r.value);
+      combined = combined.concat(rows);
+    }
+    // EDI files are supplementary — silent fail is fine
+  });
+
+  buildEdiMap(combined);
+}
+
+function parseCsv(text) {
+  const lines = text.split(/
+?
+/).filter(Boolean);
+  if (lines.length < 2) return [];
+  // Split on comma but respect quoted fields
+  const splitLine = line => {
+    const out = []; let cur = ''; let inQ = false;
+    for (const ch of line) {
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { out.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur.trim());
+    return out;
+  };
+  const headers = splitLine(lines[0]);
+  return lines.slice(1).map(l => {
+    const vals = splitLine(l);
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = vals[i] ?? '');
+    return obj;
+  });
+}
+
+function buildEdiMap(rows) {
+  ediMap = {};
+  for (const row of rows) {
+    // Normalize file number: strip whitespace
+    const fileNo  = String(row['FILENUMBER'] || row['BROKERREFERENCE'] || '').trim();
+    const lineNo  = String(row['LINENUMBER'] || '').trim().replace(/^0+/, '') || '0';
+    if (!fileNo) continue;
+    const key = fileNo + '|' + lineNo;
+    ediMap[key] = {
+      enteredValue: String(row['ENTEREDVALUE'] || '').trim(),
+    };
+  }
+}
+
+function ediLookup(refNo, lineNo) {
+  // Normalize reference number and line number to match EDI map keys
+  const ref  = String(refNo  || '').trim();
+  const line = String(lineNo || '').trim().replace(/^0+/, '') || '0';
+  return ediMap[ref + '|' + line] || null;
+}
+
+// ═══════════════════════════════════════════════════
 // Parse an ArrayBuffer → array of row objects (throws on error)
 function parseXlsxToRows(ab) {
   const wb = XLSX.read(new Uint8Array(ab), { type:'array', cellDates:true, dateNF:'mm/dd/yyyy' });
@@ -471,6 +551,7 @@ function parseXlsx(ab, src) {
   try {
     const rows = parseXlsxToRows(ab);
     applyRows(rows, src);
+    loadEdiCsvs(); // reload EDI lookup for uploaded file too
   } catch(e) {
     setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
   }
@@ -680,7 +761,14 @@ function renderTable(rows, matchCodes) {
   for (const row of display) {
     html += '<tr>';
     for (const dc of DISP_COLS) {
-      const val = String(row[C[dc.key]] ?? '');
+      let val;
+      if (dc.key === 'lineValue') {
+        const edi = ediLookup(row[C.ref], row[C.line]);
+        val = edi ? edi.enteredValue : '';
+      } else {
+        val = String(row[C[dc.key]] ?? '');
+      }
+      val = String(val);
 
       if (dc.key === 'addlTariff') {
         // Render each comma-separated code as a colored token with space between
@@ -727,7 +815,13 @@ function dlXlsx() {
   const exportData = filtered.map(row => {
     const out = {};
     for (const dc of DISP_COLS) {
-      let val = row[C[dc.key]] ?? '';
+      let val;
+      if (dc.key === 'lineValue') {
+        const edi = ediLookup(row[C.ref], row[C.line]);
+        val = edi ? edi.enteredValue : '';
+      } else {
+        val = row[C[dc.key]] ?? '';
+      }
       // Add space after commas for readability in XLSX
       if (dc.key === 'addlTariff' && val) {
         val = String(val).split(',').map(s => s.trim()).join(',  ');
