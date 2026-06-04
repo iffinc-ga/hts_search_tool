@@ -267,9 +267,10 @@ td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:400px;white-space
           + Add Code
         </button>
         <div style="font-size:.68rem;color:var(--g400);margin-top:6px;line-height:1.6">
-          Dots are optional — <span class="mono" style="font-size:.68rem">990388015</span> and
-          <span class="mono" style="font-size:.68rem">9903.88.015</span> both work.
-          Prefix search: <span class="mono" style="font-size:.68rem">9903</span> matches all IEEPA codes.
+          Enter <strong>4–10 digits</strong> — dots optional.
+          <span class="mono" style="font-size:.68rem">9903</span> matches all Ch 99 &nbsp;·&nbsp;
+          <span class="mono" style="font-size:.68rem">720836</span> matches all 7208.36.xx &nbsp;·&nbsp;
+          <span class="mono" style="font-size:.68rem">9903.88.01</span> exact match.
         </div>
       </div>
 
@@ -288,6 +289,16 @@ td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:400px;white-space
           </div>
           <div style="font-size:.67rem;color:var(--g400);margin-top:3px">
             Leave blank to search all dates · type freely, e.g. 01/01/2025
+          </div>
+        </div>
+        <div>
+          <label class="lbl">Country of Origin (optional)</label>
+          <input type="text" id="countryInput" class="mono"
+            placeholder="e.g. CN  or  CN, DE, JP"
+            style="font-size:.82rem;padding:6px 9px"
+            oninput="this.value=this.value.toUpperCase()">
+          <div style="font-size:.67rem;color:var(--g400);margin-top:3px">
+            2-letter ISO code · multiple countries comma-separated · leave blank for all
           </div>
         </div>
         <div class="row-c">
@@ -320,158 +331,169 @@ td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:400px;white-space
 
 <script>
 // ═══════════════════════════════════════════════════
-// EXACT COLUMN NAMES FROM THE XLSX
+// COLUMN DEFINITIONS — EDI CSV is primary source
+// XLSX files used only for IT Number lookup
 // ═══════════════════════════════════════════════════
-const C = {
-  ref:        'REFERENCE NO',
-  entry:      'ENTRY NUMBER',
-  it:         'IT NUMBER',
-  hts:        'HTS NO',
-  htsDesc:    'HTS NO DESCRIPTION',
-  line:       '7501 LINE #',
-  primTariff: 'Primary Tariff',
-  addlTariff: 'ADDITIONAL TARIFFS',
-  importer:   'IMPORTER NAME',
-  importCode: 'IMPORTER CODE',
-  importEin:  'IMPORTER EIN',
-  importDate: 'IMPORT DATE',
-  entryDate:  'ENTRY DATE',
-  mfr:        'MANUFACTURE NAME',
-  mfrChb:     'CHB MANUFACTURER NAME',
-  export:     'EXPORT DATE',
-  transport:  'MODE OF TRANSPORTATION NAME',
-  lineValue:  '_LINE_VALUE',       // populated from EDI CSV lookup
+
+// EDI CSV columns
+const E = {
+  ref:        'BROKERREFERENCE',
+  entry:      'ENTRYNUMBER',
+  importer:   'IMPORTERNAME',
+  importId:   'IMPORTERID',
+  line:       'LINENUMBER',
+  hts:        'HTS_NUMBER',
+  htsDesc:    'HTS_DESCRIPTION',
+  mfr:        'MANUFACTURERNAME',
+  entryDate:  'ENTRYDATE',
+  arrivalDate:'ARRIVALDATE',
+  exportDate: 'DATEOFEXPORT',
+  transport:  'MODEOFTRANSPORT',
+  lineValue:  'ENTEREDVALUE',
+  country:    'COUNTRYOFORIGIN',
+  // Additional HTS columns (ADL1–ADL7)
+  adl: ['ADL1_HTS_NUMBER','ADL2_HTS_NUMBER','ADL3_HTS_NUMBER',
+        'ADL4_HTS_NUMBER','ADL5_HTS_NUMBER','ADL6_HTS_NUMBER','ADL7_HTS_NUMBER'],
+  adlDesc: ['ADL1_HTS_DESCRIPTION','ADL2_HTS_DESCRIPTION','ADL3_HTS_DESCRIPTION',
+            'ADL4_HTS_DESCRIPTION','ADL5_HTS_DESCRIPTION','ADL6_HTS_DESCRIPTION','ADL7_HTS_DESCRIPTION'],
 };
 
-// Display columns for table + XLSX export (in order)
+// All HTS columns to search across
+const HTS_COLS = [E.hts, ...E.adl];
+
+// Display columns (in order)
 const DISP_COLS = [
-  { label:'IFF Reference',        key:'ref'        },
-  { label:'Entry Number',         key:'entry'      },
-  { label:'Importer Name',        key:'importer'   },
-  { label:'Descartes ID',         key:'importCode' },
-  { label:'Importer EIN/CAN',     key:'importEin'  },
-  { label:'Entry Line #',         key:'line'       },
-  { label:'HTS No',               key:'hts'        },
-  { label:'HTS Description',      key:'htsDesc'    },
-  { label:'Additional Tariffs',   key:'addlTariff' },
-  { label:'Manufacturer',         key:'mfr'        },
-  { label:'Entry Date',           key:'entryDate'  },
-  { label:'Arrival Date',         key:'importDate' },
-  { label:'IT Number',            key:'it'         },
-  { label:'Export Date',          key:'export'     },
-  { label:'Mode of Transport',     key:'transport'  },
-  { label:'Line Value',            key:'lineValue'  },
+  { label:'IFF Reference',        src:'edi', key:'ref'         },
+  { label:'Entry Number',         src:'edi', key:'entry'       },
+  { label:'Importer Name',        src:'edi', key:'importer'    },
+  { label:'Importer EIN/CAN',     src:'edi', key:'importId'    },
+  { label:'Entry Line #',         src:'edi', key:'line'        },
+  { label:'HTS Code',             src:'edi', key:'hts'         },
+  { label:'HTS Description',      src:'edi', key:'htsDesc'     },
+  { label:'Additional Tariffs',   src:'adl', key:'adl'         }, // special: combines ADL1-7
+  { label:'Manufacturer',         src:'edi', key:'mfr'         },
+  { label:'Entry Date',           src:'edi', key:'entryDate'   },
+  { label:'Arrival Date',         src:'edi', key:'arrivalDate' },
+  { label:'IT Number',            src:'it',  key:'it'          }, // from XLSX lookup
+  { label:'Export Date',          src:'edi', key:'exportDate'  },
+  { label:'Mode of Transport',    src:'edi', key:'transport'   },
+  { label:'Line Value',           src:'edi', key:'lineValue'   },
+  { label:'Country of Origin',    src:'edi', key:'country'     },
 ];
 
 // ═══════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════
-let allRows = [], filtered = [], dataLoaded = false, htsCount = 1;
-let ediMap = {};   // key: fileNumber|lineNumber → enteredValue
+let allRows    = [];      // EDI rows (primary)
+let filtered   = [];
+let itMap      = {};      // REFERENCE NO|LINE# → IT NUMBER  (from XLSX)
+let dataLoaded = false;
+let htsCount   = 1;
 
 // ═══════════════════════════════════════════════════
-// STRIP DOTS (normalize HTS for comparison)
+// GITHUB FILE LISTS
 // ═══════════════════════════════════════════════════
-const nd = s => String(s || '').replace(/\./g, '').trim().toLowerCase();
+const GH_BASE  = 'https://raw.githubusercontent.com/iffinc-ga/hts_search_tool/main/';
 
-// All HTS codes from a row (primary + each comma-split additional)
-function rowCodes(row) {
-  const codes = [];
-  const h = nd(row[C.hts]);
-  if (h) codes.push(h);
-  const addl = String(row[C.addlTariff] || '');
-  addl.split(',').map(s => nd(s)).filter(Boolean).forEach(c => codes.push(c));
-  return [...new Set(codes)]; // dedupe
-}
-
-// ═══════════════════════════════════════════════════
-// GITHUB — HARDCODED (no config needed)
-// ═══════════════════════════════════════════════════
-const GH_BASE   = 'https://raw.githubusercontent.com/iffinc-ga/hts_search_tool/main/';
 const EDI_FILES = [
   { url: GH_BASE + 'edi_archive.csv',  label: 'EDI archive'   },
+  { url: GH_BASE + 'edi_gap.csv',      label: 'EDI gap'       },
   { url: GH_BASE + 'edi_current.csv',  label: 'EDI current'   },
 ];
-const GH_FILES  = [
-  { url: GH_BASE + 'trimika_2025.xlsx',  label: '2025 archive' },
-  { url: GH_BASE + 'trimika_data.xlsx',  label: 'current data' },
+
+const XLSX_FILES = [
+  { url: GH_BASE + 'trimika_2025.xlsx', label: '2025 archive' },
+  { url: GH_BASE + 'trimika_gap.xlsx',  label: 'gap'          },
+  { url: GH_BASE + 'trimika_data.xlsx', label: 'current'      },
 ];
 
+// ═══════════════════════════════════════════════════
+// LOAD DATA
+// ═══════════════════════════════════════════════════
 async function loadGH() {
   setMsg('<span style="font-size:.8rem;color:var(--g400)"><span class="spin" style="border-top-color:var(--navy-mid);border-color:var(--g200)"></span> Loading data…</span>');
-  try {
-    // Fetch both files in parallel
-    const results = await Promise.allSettled(
-      GH_FILES.map(f => fetch(f.url + '?t=' + Date.now()).then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.arrayBuffer();
-      }))
-    );
 
-    let combinedRows = [];
-    const loaded = [], failed = [];
-
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') {
-        const rows = parseXlsxToRows(r.value);
-        combinedRows = combinedRows.concat(rows);
-        loaded.push(`${GH_FILES[i].label} (${rows.length.toLocaleString()} rows)`);
-      } else {
-        failed.push(GH_FILES[i].label);
-      }
-    });
-
-    if (!combinedRows.length) throw new Error('No data loaded from either file');
-
-    applyRows(combinedRows, loaded.join(' + '));
-
-    // Load EDI CSVs in background for Line Value lookup
-    loadEdiCsvs();
-
-    if (failed.length) {
-      setMsg(`<span class="alert a-warn">⚠ Loaded ${loaded.join(' + ')} · Could not load: ${failed.join(', ')}</span>`);
-    }
-
-  } catch(e) {
-    setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
-  }
-}
-
-function handleUpload(e) {
-  const f = e.target.files[0]; if (!f) return;
-  const r = new FileReader();
-  r.onload = ev => parseXlsx(ev.target.result, f.name);
-  r.readAsArrayBuffer(f);
-  e.target.value = '';
-}
-
-// ═══════════════════════════════════════════════════
-// EDI CSV LOADING & LOOKUP
-// ═══════════════════════════════════════════════════
-async function loadEdiCsvs() {
-  const results = await Promise.allSettled(
+  // Load EDI CSVs as primary data source
+  const ediResults = await Promise.allSettled(
     EDI_FILES.map(f => fetch(f.url + '?t=' + Date.now()).then(r => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.text();
     }))
   );
 
-  let combined = [];
-  results.forEach((r, i) => {
+  let combinedRows = [];
+  const loaded = [], failed = [];
+  ediResults.forEach((r, i) => {
     if (r.status === 'fulfilled') {
       const rows = parseCsv(r.value);
-      combined = combined.concat(rows);
+      combinedRows = combinedRows.concat(rows);
+      loaded.push(`${EDI_FILES[i].label} (${rows.length.toLocaleString()} rows)`);
+    } else {
+      failed.push(EDI_FILES[i].label);
     }
-    // EDI files are supplementary — silent fail is fine
   });
 
-  buildEdiMap(combined);
+  if (!combinedRows.length) {
+    setMsg('<span class="alert a-err">✕ No EDI data loaded. Check GitHub config.</span>');
+    return;
+  }
+
+  applyRows(combinedRows, loaded.join(' + '));
+  if (failed.length)
+    setMsg(`<span class="alert a-warn">⚠ Loaded: ${loaded.join(' + ')} · Not found: ${failed.join(', ')}</span>`);
+
+  // Load XLSX files in background for IT Number lookup only
+  loadItLookup();
 }
 
+// ═══════════════════════════════════════════════════
+// IT NUMBER LOOKUP (from XLSX)
+// ═══════════════════════════════════════════════════
+async function loadItLookup() {
+  const results = await Promise.allSettled(
+    XLSX_FILES.map(f => fetch(f.url + '?t=' + Date.now()).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.arrayBuffer();
+    }))
+  );
+
+  let combinedXlsx = [];
+  results.forEach(r => {
+    if (r.status === 'fulfilled') {
+      try {
+        const rows = parseXlsxToRows(r.value);
+        combinedXlsx = combinedXlsx.concat(rows);
+      } catch(e) { /* silent */ }
+    }
+  });
+
+  buildItMap(combinedXlsx);
+}
+
+function buildItMap(rows) {
+  itMap = {};
+  for (const row of rows) {
+    const ref  = String(row['REFERENCE NO']  || '').trim();
+    const line = String(row['7501 LINE #']   || '').trim().replace(/^0+/, '') || '0';
+    const it   = String(row['IT NUMBER']     || '').trim();
+    if (ref && it) itMap[ref + '|' + line] = it;
+  }
+  // Re-render if results already showing (IT numbers now available)
+  if (filtered.length) renderTable(filtered, getSearchCodes());
+}
+
+function itLookup(ref, line) {
+  const r = String(ref  || '').trim();
+  const l = String(line || '').trim().replace(/^0+/, '') || '0';
+  return itMap[r + '|' + l] || '';
+}
+
+// ═══════════════════════════════════════════════════
+// CSV PARSING
+// ═══════════════════════════════════════════════════
 function parseCsv(text) {
-  const lines = text.replace(/\r/g, '').split('\n').filter(Boolean);
+  const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(Boolean);
   if (lines.length < 2) return [];
-  // Split on comma but respect quoted fields
   const splitLine = line => {
     const out = []; let cur = ''; let inQ = false;
     for (const ch of line) {
@@ -482,144 +504,132 @@ function parseCsv(text) {
     out.push(cur.trim());
     return out;
   };
-  const headers = splitLine(lines[0]);
+  const headers = splitLine(lines[0]).map(h => h.replace(/^['"]|['"]$/g,'').trim());
   return lines.slice(1).map(l => {
     const vals = splitLine(l);
     const obj = {};
-    headers.forEach((h, i) => obj[h] = vals[i] ?? '');
+    headers.forEach((h, i) => obj[h] = (vals[i] ?? '').replace(/^'/,'').trim());
     return obj;
   });
 }
 
-function buildEdiMap(rows) {
-  ediMap = {};
-  for (const row of rows) {
-    // Normalize file number: strip whitespace
-    const fileNo  = String(row['FILENUMBER'] || row['BROKERREFERENCE'] || '').trim();
-    const lineNo  = String(row['LINENUMBER'] || '').trim().replace(/^0+/, '') || '0';
-    if (!fileNo) continue;
-    const key = fileNo + '|' + lineNo;
-    ediMap[key] = {
-      enteredValue: String(row['ENTEREDVALUE'] || '').trim(),
-    };
-  }
-}
-
-function ediLookup(refNo, lineNo) {
-  // Normalize reference number and line number to match EDI map keys
-  const ref  = String(refNo  || '').trim();
-  const line = String(lineNo || '').trim().replace(/^0+/, '') || '0';
-  return ediMap[ref + '|' + line] || null;
-}
-
 // ═══════════════════════════════════════════════════
-// Parse an ArrayBuffer → array of row objects (throws on error)
+// XLSX PARSING (for IT Number lookup only)
+// ═══════════════════════════════════════════════════
 function parseXlsxToRows(ab) {
   const wb = XLSX.read(new Uint8Array(ab), { type:'array', cellDates:true, dateNF:'mm/dd/yyyy' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
 }
 
-// Apply a combined row array to state and refresh UI
+// ═══════════════════════════════════════════════════
+// APPLY ROWS (EDI data → state + UI)
+// ═══════════════════════════════════════════════════
 function applyRows(rows, src) {
   if (!rows.length) { setMsg('<span class="alert a-warn">⚠ File appears empty.</span>'); return; }
 
   allRows = rows; filtered = []; dataLoaded = true;
 
   document.getElementById('stRows').textContent = rows.length.toLocaleString();
-  const edates = rows.map(r => r[C.entryDate]).filter(Boolean).sort((a,b) => new Date(a) - new Date(b));
+  const edates = rows.map(r => r[E.entryDate]).filter(Boolean)
+    .sort((a,b) => new Date(a) - new Date(b));
   if (edates.length)
     document.getElementById('stDates').textContent = `${edates[0]} – ${edates[edates.length-1]}`;
-  const uniqImp = new Set(rows.map(r => r[C.importer]).filter(Boolean));
+  const uniqImp = new Set(rows.map(r => r[E.importer]).filter(Boolean));
   document.getElementById('stImporters').textContent = uniqImp.size.toLocaleString();
-  const withExtra = rows.filter(r => r[C.addlTariff]).length;
+  const withExtra = rows.filter(r => E.adl.some(c => r[c])).length;
   document.getElementById('stExtra').textContent = withExtra.toLocaleString();
   document.getElementById('dataStats').classList.remove('hidden');
 
   document.getElementById('hdrBadge').classList.remove('hidden');
   document.getElementById('hdrRows').textContent = rows.length.toLocaleString() + ' rows';
-  document.getElementById('hdrSrc').textContent = src;
+  document.getElementById('hdrSrc').textContent  = src;
   document.getElementById('hdrEntries').textContent = rows.length.toLocaleString() + ' rows';
   document.getElementById('hdrEntries').style.display = '';
 
   setMsg(`<span class="alert a-ok">✓ ${rows.length.toLocaleString()} rows loaded — ${src}</span>`);
 }
 
-// Single-file upload path (replaces all data with uploaded file)
-function parseXlsx(ab, src) {
-  try {
-    const rows = parseXlsxToRows(ab);
-    applyRows(rows, src);
-    loadEdiCsvs(); // reload EDI lookup for uploaded file too
-  } catch(e) {
-    setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
+// Handle manual XLSX upload — treat as EDI-format CSV or XLSX
+function handleUpload(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    reader.onload = ev => {
+      const rows = parseCsv(ev.target.result);
+      applyRows(rows, file.name);
+    };
+    reader.readAsText(file, 'utf-8');
+  } else {
+    reader.onload = ev => {
+      try {
+        const rows = parseXlsxToRows(ev.target.result);
+        applyRows(rows, file.name);
+      } catch(e) {
+        setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
+      }
+    };
+    reader.readAsArrayBuffer(file);
   }
+  e.target.value = '';
+}
+
+// ═══════════════════════════════════════════════════
+// ROW CODES — all HTS values from a row
+// ═══════════════════════════════════════════════════
+const nd = s => String(s || '').replace(/\./g, '').trim().toLowerCase();
+
+function rowCodes(row) {
+  const codes = new Set();
+  for (const col of HTS_COLS) {
+    const v = nd(row[col]);
+    if (v) codes.add(v);
+  }
+  return [...codes];
 }
 
 // ═══════════════════════════════════════════════════
 // HTS INPUT MANAGEMENT
 // ═══════════════════════════════════════════════════
-// ── HTS prefix → label for search input tags ──────────────────
-// Based on CBP Chapter 99 structure. Description column in results
-// always shows the actual HTS NO DESCRIPTION from the data.
 function htsTag(raw) {
   const v = nd(raw);
   if (!v) return { lbl:'—', cls:'t-other' };
-
-  // ── Chapter 99 codes ───────────────────────────────────────────
-  if (v.startsWith('990303'))             return { lbl:'Sec 122',  cls:'t-122'   }; // imports surcharge
-  if (v.startsWith('990331'))             return { lbl:'Sec 310',  cls:'t-310'   }; // USMCA/MFN
-  if (v.startsWith('990388'))             return { lbl:'Sec 301',  cls:'t-301'   }; // China tariffs
-  if (v.startsWith('99038'))              return { lbl:'Sec 301',  cls:'t-301'   }; // China tariffs (other)
+  if (v.startsWith('990303'))             return { lbl:'Sec 122',  cls:'t-122'   };
+  if (v.startsWith('990331'))             return { lbl:'Sec 310',  cls:'t-310'   };
+  if (v.startsWith('990388'))             return { lbl:'Sec 301',  cls:'t-301'   };
+  if (v.startsWith('99038'))              return { lbl:'Sec 301',  cls:'t-301'   };
   if (v.startsWith('990301') ||
-      v.startsWith('990302'))             return { lbl:'IEEPA',    cls:'t-ieepa' }; // IEEPA specific
-  if (v.startsWith('9903'))              return { lbl:'Ch 99',    cls:'t-ch99'  }; // other Ch 99
-
-  // ── Section 232 (steel & aluminum) ────────────────────────────
-  if (v.startsWith('990401') ||
-      v.startsWith('990402') ||
-      v.startsWith('990403') ||
-      v.startsWith('990404') ||
-      v.startsWith('990411') ||
-      v.startsWith('990412') ||
-      v.startsWith('990413') ||
-      v.startsWith('990414') ||
-      v.startsWith('990415') ||
-      v.startsWith('990416') ||
-      v.startsWith('990417') ||
-      v.startsWith('990418') ||
-      v.startsWith('990419') ||
-      v.startsWith('990420') ||
-      v.startsWith('990480') ||
-      v.startsWith('990481') ||
-      v.startsWith('990482'))            return { lbl:'Sec 232',  cls:'t-232'   };
-  if (v.startsWith('9904'))              return { lbl:'Sec 232',  cls:'t-232'   }; // Sec 232 catch-all
-
-  if (v.startsWith('99'))                return { lbl:'Ch 99',    cls:'t-ch99'  }; // other Ch 99
-
-  // ── Regular chapters ──────────────────────────────────────────
+      v.startsWith('990302'))             return { lbl:'IEEPA',    cls:'t-ieepa' };
+  if (v.startsWith('9903'))               return { lbl:'Ch 99',    cls:'t-ch99'  };
+  if (v.startsWith('9904'))               return { lbl:'Sec 232',  cls:'t-232'   };
+  if (v.startsWith('99'))                 return { lbl:'Ch 99',    cls:'t-ch99'  };
   const ch = parseInt(v.slice(0,2), 10);
-  if (ch >= 1 && ch <= 97)               return { lbl:'Ch 1–97',  cls:'t-ch97'  };
+  if (ch >= 72 && ch <= 83)               return { lbl:'Sec 232',  cls:'t-232'   };
+  if (ch >= 1  && ch <= 97)               return { lbl:'Ch 1–97',  cls:'t-ch97'  };
   return { lbl:'—', cls:'t-other' };
 }
 
-// Look up description from loaded data for a given HTS code (stripped of dots)
 function lookupDesc(codeNd) {
   if (!codeNd || !allRows.length) return null;
-  const row = allRows.find(r => nd(r[C.hts]) === codeNd ||
-    String(r[C.addlTariff]||'').split(',').map(s=>nd(s)).includes(codeNd));
-  return row ? (row[C.htsDesc] || null) : null;
+  const row = allRows.find(r =>
+    HTS_COLS.some(c => nd(r[c]) === codeNd)
+  );
+  if (!row) return null;
+  // Return description from matching column
+  const matchCol = HTS_COLS.find(c => nd(row[c]) === codeNd);
+  if (!matchCol) return null;
+  const descCol = matchCol === E.hts
+    ? E.htsDesc
+    : E.adlDesc[E.adl.indexOf(matchCol)];
+  return row[descCol] || null;
 }
 
 function onHtsIn(inp, idx) {
-  const t   = htsTag(inp.value);
-  const el  = document.getElementById(`tag${idx}`);
-  el.textContent = t.lbl;
-  el.className   = `htag ${t.cls}`;
-  // Show description as tooltip if data is loaded and we have an exact match
+  const t  = htsTag(inp.value);
+  const el = document.getElementById(`tag${idx}`);
+  el.textContent = t.lbl; el.className = `htag ${t.cls}`;
   const desc = dataLoaded ? lookupDesc(nd(inp.value)) : null;
   el.title = desc || '';
-  // Also show description inline below the input if exact match found
   let hint = document.getElementById(`hint${idx}`);
   if (!hint) {
     hint = document.createElement('div');
@@ -635,13 +645,13 @@ function onHtsKey(e) { if (e.key === 'Enter') addHts(); }
 function addHts() {
   if (htsCount >= 5) return;
   const list = document.getElementById('htsList');
-  const idx = htsCount++;
-  const div = document.createElement('div');
+  const idx  = htsCount++;
+  const div  = document.createElement('div');
   div.className = 'hts-row'; div.dataset.idx = idx;
   div.innerHTML = `
     <span class="htag t-other" id="tag${idx}">—</span>
     <input type="text" class="mono hts-input" id="hts${idx}"
-      placeholder="e.g. 990301 or 72083600"
+      placeholder="e.g. 990388015 or 72083600"
       oninput="onHtsIn(this,${idx})" onkeydown="onHtsKey(event)">
     <button class="bx" onclick="removeHts(${idx})" title="Remove">✕</button>`;
   list.appendChild(div);
@@ -672,8 +682,8 @@ function getSearchCodes() {
 // ═══════════════════════════════════════════════════
 function fmtDate(inp) {
   let v = inp.value.replace(/[^0-9]/g, '');
-  if (v.length > 2)  v = v.slice(0,2) + '/' + v.slice(2);
-  if (v.length > 5)  v = v.slice(0,5) + '/' + v.slice(5);
+  if (v.length > 2) v = v.slice(0,2) + '/' + v.slice(2);
+  if (v.length > 5) v = v.slice(0,5) + '/' + v.slice(5);
   if (v.length > 10) v = v.slice(0,10);
   inp.value = v;
   const full = v.length === 10;
@@ -694,21 +704,28 @@ function parseDt(str, endOfDay) {
 function doSearch() {
   if (!dataLoaded) { setMsg('<span class="alert a-warn">⚠ Data is still loading — please wait.</span>'); return; }
   const codes = getSearchCodes();
-  if (!codes.length) {
-    showEmpty('⚠️', 'Enter at least one HTS code to search.'); return;
-  }
-  const dfrom = document.getElementById('dfrom').value;
-  const dto   = document.getElementById('dto').value;
+  if (!codes.length) { showEmpty('⚠️', 'Enter at least one HTS code to search.'); return; }
+
+  const dfrom     = document.getElementById('dfrom').value;
+  const dto       = document.getElementById('dto').value;
+  const countries = (document.getElementById('countryInput').value || '')
+    .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 
   filtered = allRows.filter(row => {
+    // Date filter
     if (dfrom || dto) {
-      const d = new Date(row[C.entryDate]);
+      const d = new Date(row[E.entryDate]);
       if (!isNaN(d)) {
-        if (dfrom && parseDt(dfrom) && d < parseDt(dfrom))        return false;
-        if (dto   && parseDt(dto)   && d > parseDt(dto, true))    return false;
+        if (dfrom && parseDt(dfrom) && d < parseDt(dfrom))     return false;
+        if (dto   && parseDt(dto)   && d > parseDt(dto, true)) return false;
       }
     }
-    // ANY match — at least one search code matches any HTS code in the row
+    // Country of origin filter
+    if (countries.length) {
+      const rowCountry = String(row[E.country] || '').trim().toUpperCase();
+      if (!countries.includes(rowCountry)) return false;
+    }
+    // HTS match
     const rc = rowCodes(row);
     return codes.some(code =>
       rc.some(c => c.startsWith(code) || code.startsWith(c.slice(0, code.length)))
@@ -726,8 +743,9 @@ function clearSearch() {
   });
   htsCount = 1;
   document.getElementById('btnAddHts').disabled = false;
-  document.getElementById('dfrom').value = '';
-  document.getElementById('dto').value = '';
+  document.getElementById('dfrom').value        = '';
+  document.getElementById('dto').value          = '';
+  document.getElementById('countryInput').value = '';
   filtered = [];
   document.getElementById('rcLabel').textContent = '';
   document.getElementById('btnDl').classList.add('hidden');
@@ -737,6 +755,11 @@ function clearSearch() {
 // ═══════════════════════════════════════════════════
 // RENDER TABLE
 // ═══════════════════════════════════════════════════
+// Get the combined ADL codes for a row (non-empty only)
+function adlCodes(row) {
+  return E.adl.map(c => row[c] || '').filter(Boolean);
+}
+
 function renderTable(rows, matchCodes) {
   const n = rows.length;
   document.getElementById('rcLabel').textContent = `— ${n.toLocaleString()} row${n !== 1 ? 's' : ''}`;
@@ -749,10 +772,9 @@ function renderTable(rows, matchCodes) {
     return;
   }
 
-  const LIMIT = 2500;
+  const LIMIT   = 2500;
   const display = rows.slice(0, LIMIT);
 
-  // Column header row
   let html = '<div class="twrap"><table><thead><tr>';
   for (const dc of DISP_COLS) html += `<th>${esc(dc.label)}</th>`;
   html += '</tr></thead><tbody>';
@@ -760,18 +782,10 @@ function renderTable(rows, matchCodes) {
   for (const row of display) {
     html += '<tr>';
     for (const dc of DISP_COLS) {
-      let val;
-      if (dc.key === 'lineValue') {
-        const edi = ediLookup(row[C.ref], row[C.line]);
-        val = edi ? edi.enteredValue : '';
-      } else {
-        val = String(row[C[dc.key]] ?? '');
-      }
-      val = String(val);
 
-      if (dc.key === 'addlTariff') {
-        // Render each comma-separated code as a colored token with space between
-        const tokens = val.split(',').map(s => s.trim()).filter(Boolean);
+      if (dc.src === 'adl') {
+        // Additional tariffs: combine ADL1-7, show as tokens
+        const tokens = adlCodes(row);
         if (!tokens.length) { html += '<td></td>'; continue; }
         let inner = '';
         tokens.forEach((tok, i) => {
@@ -780,16 +794,21 @@ function renderTable(rows, matchCodes) {
           inner += `<span class="hts-token ${isHit ? 'ht-match' : 'ht-plain'}">${esc(tok)}</span>`;
           if (i < tokens.length - 1) inner += `<span class="hts-sep">,&nbsp;</span>`;
         });
-        html += `<td class="hts-cell" title="${esc(val)}">${inner}</td>`;
+        html += `<td class="hts-cell" title="${esc(tokens.join(',  '))}">${inner}</td>`;
 
-      } else if (dc.key === 'hts') {
-        const vNd = nd(val);
-        const isHit = val && matchCodes.some(c => vNd.startsWith(c) || c.startsWith(vNd.slice(0,c.length)));
-        html += `<td class="${isHit ? 'hit' : 'mc'}" title="${esc(val)}">${esc(val)}</td>`;
+      } else if (dc.src === 'it') {
+        const val = itLookup(row[E.ref], row[E.line]);
+        html += `<td class="mc" title="${esc(val)}">${esc(val)}</td>`;
 
       } else {
-        const mono = ['entry','it','importEin','importCode','line','primTariff'].includes(dc.key);
-        html += `<td class="${mono ? 'mc' : ''}" title="${esc(val)}">${esc(val)}</td>`;
+        const col = E[dc.key];
+        const val = String(row[col] ?? '');
+        const isHts = dc.key === 'hts';
+        const vNd   = nd(val);
+        const isHit = isHts && matchCodes.some(c =>
+          vNd.startsWith(c) || c.startsWith(vNd.slice(0, c.length)));
+        const mono  = ['entry','line','importId','lineValue'].includes(dc.key);
+        html += `<td class="${isHit ? 'hit' : (mono ? 'mc' : '')}" title="${esc(val)}">${esc(val)}</td>`;
       }
     }
     html += '</tr>';
@@ -800,14 +819,14 @@ function renderTable(rows, matchCodes) {
   if (rows.length > LIMIT)
     html += `<div class="alert a-info" style="margin:10px">
       Showing ${LIMIT.toLocaleString()} of ${rows.length.toLocaleString()} rows.
-      Download XLSX to see all ${rows.length.toLocaleString()} results.
+      Download XLSX to see all results.
     </div>`;
 
   document.getElementById('resultsBody').innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════════
-// DOWNLOAD XLSX
+// DOWNLOAD XLSX (ExcelJS)
 // ═══════════════════════════════════════════════════
 async function dlXlsx() {
   if (!filtered.length) return;
@@ -816,78 +835,59 @@ async function dlXlsx() {
   wb.creator = 'IFF Trimika Tool';
   const ws = wb.addWorksheet('HTS Search Results');
 
-  // ── Column definitions ──────────────────────────────────────
-  ws.columns = DISP_COLS.map(dc => ({
-    header: dc.label,
-    key:    dc.label,
-    width:  24,
-  }));
+  ws.columns = DISP_COLS.map(dc => ({ header: dc.label, key: dc.label, width: 24 }));
 
-  // ── Header styling ──────────────────────────────────────────
+  // Header styling
   const hdrRow = ws.getRow(1);
   hdrRow.height = 18;
   hdrRow.eachCell({ includeEmpty: true }, cell => {
-    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F2545' } };
-    cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, name: 'Calibri', size: 11 };
-    cell.border    = { bottom: { style: 'medium', color: { argb: 'FFE8A020' } } };
-    cell.alignment = { vertical: 'middle', wrapText: false };
+    cell.fill      = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF0F2545' } };
+    cell.font      = { bold:true, color:{ argb:'FFFFFFFF' }, name:'Calibri', size:11 };
+    cell.border    = { bottom:{ style:'medium', color:{ argb:'FFE8A020' } } };
+    cell.alignment = { vertical:'middle', wrapText:false };
   });
 
-  // ── Data rows ───────────────────────────────────────────────
-  const lineValColIdx = DISP_COLS.findIndex(dc => dc.key === 'lineValue') + 1; // 1-based column index
+  // Data rows
+  const lineValIdx = DISP_COLS.findIndex(dc => dc.key === 'lineValue') + 1;
 
   filtered.forEach((row, rowIdx) => {
     const vals = DISP_COLS.map(dc => {
-      let val;
-      if (dc.key === 'lineValue') {
-        const edi = ediLookup(row[C.ref], row[C.line]);
-        val = edi ? edi.enteredValue : '';
-      } else {
-        val = row[C[dc.key]] ?? '';
-      }
-      if (dc.key === 'addlTariff' && val) {
-        val = String(val).split(',').map(s => s.trim()).join(',  ');
-      }
-      return val;
+      if (dc.src === 'adl')
+        return adlCodes(row).join(',  ');
+      if (dc.src === 'it')
+        return itLookup(row[E.ref], row[E.line]);
+      return String(row[E[dc.key]] ?? '');
     });
 
-    const excelRow  = ws.addRow(vals);
+    const excelRow = ws.addRow(vals);
     excelRow.height = 15;
-    const bgArgb    = rowIdx % 2 === 0 ? 'FFEEF1F7' : 'FFFFFFFF';
+    const bgArgb = rowIdx % 2 === 0 ? 'FFEEF1F7' : 'FFFFFFFF';
 
-    excelRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
-      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
-      cell.font      = { name: 'Calibri', size: 10 };
-      cell.alignment = { vertical: 'middle' };
-      cell.border    = { bottom: { style: 'thin', color: { argb: 'FFDDE3EE' } } };
-      // Format Line Value column as currency
-      if (colIdx === lineValColIdx) {
-        const num = parseFloat(String(cell.value).replace(/,/g, ''));
+    excelRow.eachCell({ includeEmpty:true }, (cell, colIdx) => {
+      cell.fill      = { type:'pattern', pattern:'solid', fgColor:{ argb:bgArgb } };
+      cell.font      = { name:'Calibri', size:10 };
+      cell.alignment = { vertical:'middle' };
+      cell.border    = { bottom:{ style:'thin', color:{ argb:'FFDDE3EE' } } };
+      if (colIdx === lineValIdx) {
+        const num = parseFloat(String(cell.value).replace(/,/g,''));
         if (!isNaN(num)) {
-          cell.value    = num;
-          cell.numFmt   = '$#,##0.00';
-          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+          cell.value     = num;
+          cell.numFmt    = '$#,##0.00';
+          cell.alignment = { vertical:'middle', horizontal:'right' };
         }
       }
     });
   });
 
-  // ── Autofilter ──────────────────────────────────────────────
-  ws.autoFilter = {
-    from: { row: 1, column: 1 },
-    to:   { row: 1, column: DISP_COLS.length },
-  };
+  ws.autoFilter = { from:{ row:1, column:1 }, to:{ row:1, column:DISP_COLS.length } };
+  ws.views = [{ state:'frozen', ySplit:1 }];
 
-  // ── Freeze header row ───────────────────────────────────────
-  ws.views = [{ state: 'frozen', ySplit: 1 }];
-
-  // ── Download ────────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();
   const blob   = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   });
   const codes = getSearchCodes().join('-') || 'results';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0,10);
   const a     = document.createElement('a');
   a.href      = URL.createObjectURL(blob);
   a.download  = `trimika_${codes}_${today}.xlsx`;
@@ -903,14 +903,15 @@ const esc = s => String(s)
   .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 function setMsg(h)  { document.getElementById('loadMsg').innerHTML = h; }
-
 function showEmpty(icon, text) {
   document.getElementById('resultsBody').innerHTML =
     `<div class="empty"><div class="ei">${icon}</div><div class="et">${text}</div></div>`;
 }
 
-// Init
-// Set yesterday's date label
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+// Set yesterday label
 const yest = new Date();
 yest.setDate(yest.getDate() - 1);
 document.getElementById('yesterdayLabel').textContent =
@@ -918,7 +919,7 @@ document.getElementById('yesterdayLabel').textContent =
   yest.getDate().toString().padStart(2,'0') + '/' +
   yest.getFullYear();
 
-// Auto-load from GitHub
+// Auto-load
 loadGH();
 </script>
 </body>
