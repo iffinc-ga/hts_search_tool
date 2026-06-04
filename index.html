@@ -704,7 +704,11 @@ function parseDt(str, endOfDay) {
 function doSearch() {
   if (!dataLoaded) { setMsg('<span class="alert a-warn">⚠ Data is still loading — please wait.</span>'); return; }
   const codes = getSearchCodes();
-  if (!codes.length) { showEmpty('⚠️', 'Enter at least one HTS code to search.'); return; }
+  const countryCheck = (document.getElementById('countryInput').value || '').trim();
+  if (!codes.length && !countryCheck) {
+    showEmpty('⚠️', 'Enter at least one HTS code or a Country of Origin to search.');
+    return;
+  }
 
   const dfrom     = document.getElementById('dfrom').value;
   const dto       = document.getElementById('dto').value;
@@ -725,11 +729,14 @@ function doSearch() {
       const rowCountry = String(row[E.country] || '').trim().toUpperCase();
       if (!countries.includes(rowCountry)) return false;
     }
-    // HTS match
-    const rc = rowCodes(row);
-    return codes.some(code =>
-      rc.some(c => c.startsWith(code) || code.startsWith(c.slice(0, code.length)))
-    );
+    // HTS match — only if codes were entered
+    if (codes.length) {
+      const rc = rowCodes(row);
+      if (!codes.some(code =>
+        rc.some(c => c.startsWith(code) || code.startsWith(c.slice(0, code.length)))
+      )) return false;
+    }
+    return true;
   });
 
   renderTable(filtered, codes);
