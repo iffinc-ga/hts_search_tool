@@ -1,474 +1,940 @@
-"""
-update_trimika.py
-─────────────────────────────────────────────────────────────────────────────
-Daily pipeline for the Trimika HTS Search Tool:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trimika · Entry HTS Search · IFF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:       #0f2545;
+  --navy-mid:   #1a3a6b;
+  --navy-lt:    #2a5298;
+  --amber:      #e8a020;
+  --amber-lt:   #f5c842;
+  --green:      #0e9e6a;
+  --red:        #c93535;
+  --teal:       #0d7f8f;
+  --white:      #ffffff;
+  --off:        #f5f7fb;
+  --g100:       #eef1f7;
+  --g200:       #dde3ee;
+  --g300:       #bec8da;
+  --g400:       #8e9bb5;
+  --g600:       #4a5678;
+  --g700:       #2e3a52;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--off);color:var(--g700);min-height:100vh}
 
-  1. Pull today's XLSX from the wy_trimika_tool email
-  2. Download trimika_data.xlsx from GitHub
-  3. Append new rows, deduplicate on REFERENCE NO + 7501 LINE #
-  4. Push combined file back to GitHub
+/* HEADER */
+.hdr{background:var(--navy);padding:0 24px;display:flex;align-items:stretch;gap:20px;
+  box-shadow:0 3px 14px rgba(0,0,0,.4);position:sticky;top:0;z-index:100}
+.hdr-brand{display:flex;align-items:center;gap:12px;padding:13px 0;
+  border-right:1px solid rgba(255,255,255,.1);padding-right:20px}
+.logo{width:34px;height:34px;background:var(--amber);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:var(--navy);font-size:.82rem;letter-spacing:.5px;flex-shrink:0}
+.hdr-title{font-size:.95rem;font-weight:600;color:var(--white);letter-spacing:.2px}
+.hdr-sub{font-size:.68rem;color:rgba(255,255,255,.45);margin-top:1px;letter-spacing:.3px}
+.hdr-pills{display:flex;align-items:center;gap:6px;padding:13px 0}
+.pill{padding:2px 9px;border-radius:20px;font-size:.65rem;font-weight:700;
+  letter-spacing:.4px;text-transform:uppercase}
+.p-amber{background:var(--amber);color:var(--navy)}
+.p-teal{background:rgba(13,127,143,.3);color:#7ee8f5;border:1px solid rgba(13,127,143,.4)}
+.p-gray{background:rgba(255,255,255,.07);color:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.1)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.hdr-badge{text-align:right;font-size:.72rem}
+.hdr-badge .hb-main{color:#7ee8f5;font-weight:600}
+.hdr-badge .hb-sub{color:rgba(255,255,255,.4);font-size:.65rem}
 
-  5. Pull today's EDI CSV from the HTS_SEARCH_TOOL_EDI email
-  6. Download edi_current.csv from GitHub
-  7. Append new rows, deduplicate on FILENUMBER + LINENUMBER
-  8. Push combined file back to GitHub
+/* LAYOUT */
+main{max-width:1440px;margin:0 auto;padding:18px 18px 40px;display:flex;flex-direction:column;gap:14px}
 
-Schedule via comprehensive_scheduler.py at 07:32 every weekday.
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--g200);border-radius:9px;
+  overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.05)}
+.ch{background:var(--navy-mid);color:var(--white);padding:8px 15px;font-size:.78rem;
+  font-weight:600;letter-spacing:.35px;display:flex;align-items:center;
+  justify-content:space-between;gap:10px}
+.ch-left{display:flex;align-items:center;gap:8px}
+.cb{padding:14px 16px}
 
-Author : IFF Automation
-─────────────────────────────────────────────────────────────────────────────
-"""
+/* FORMS */
+.lbl{display:block;font-size:.68rem;font-weight:600;color:var(--g400);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+input[type=text],input[type=password],input[type=date]{
+  width:100%;border:1px solid var(--g200);border-radius:5px;
+  padding:7px 10px;font-size:.85rem;font-family:var(--sans);color:var(--g700);
+  background:var(--white);transition:border-color .14s,box-shadow .14s}
+input:focus{outline:none;border-color:var(--navy-lt);box-shadow:0 0 0 3px rgba(42,82,152,.1)}
+.mono{font-family:var(--mono)!important;font-size:.82rem!important;letter-spacing:.3px}
 
-import os
-import io
-import base64
-import tempfile
-import logging
-import requests
-import pandas as pd
-import pythoncom
-import win32com.client
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 15px;
+  border-radius:5px;font-size:.8rem;font-weight:600;cursor:pointer;border:none;
+  transition:all .14s;white-space:nowrap;font-family:var(--sans)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-navy{background:var(--navy-mid);color:var(--white)}
+.btn-navy:hover:not(:disabled){background:var(--navy-lt)}
+.btn-amber{background:var(--amber);color:var(--navy)}
+.btn-amber:hover:not(:disabled){background:var(--amber-lt)}
+.btn-green{background:var(--green);color:var(--white)}
+.btn-green:hover:not(:disabled){filter:brightness(1.1)}
+.btn-ghost{background:transparent;color:var(--g600);border:1px solid var(--g200)}
+.btn-ghost:hover:not(:disabled){background:var(--g100)}
+.btn-sm{padding:4px 11px;font-size:.75rem}
+.btn-xs{padding:3px 8px;font-size:.7rem}
+.bx{background:none;border:none;cursor:pointer;color:var(--g400);
+  padding:3px 6px;border-radius:4px;font-size:.85rem;transition:all .13s}
+.bx:hover{background:var(--g100);color:var(--red)}
 
-# ─────────────────────────────────────────────────────────
-# CONFIGURATION
-# ─────────────────────────────────────────────────────────
-SHARED_MAILBOX   = "reports@iffusa.com"
-REPORTS_FOLDER   = "REPORTS"
-EMAIL_SUBJECT    = "wy_trimika_tool"
-EDI_SUBJECT      = "HTS_SEARCH_TOOL_EDI"
+/* GRIDS */
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:11px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.row{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap}
+.row-c{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 
-GITHUB_OWNER     = "iffinc-ga"
-GITHUB_REPO      = "hts_search_tool"
-GITHUB_BRANCH    = "main"
-GITHUB_TOKEN     = ""                    # ← paste your PAT here
+/* HTS INPUTS */
+.hts-list{display:flex;flex-direction:column;gap:7px}
+.hts-row{display:flex;gap:7px;align-items:center}
+.hts-row input{flex:1}
+.htag{font-size:.62rem;font-weight:700;letter-spacing:.35px;padding:2px 7px;
+  border-radius:3px;text-transform:uppercase;white-space:nowrap;
+  flex-shrink:0;min-width:66px;text-align:center}
+.t-ieepa{background:#fee2e2;color:#991b1b}
+.t-301  {background:#ffe4cc;color:#7c2d12}
+.t-232  {background:#fef3c7;color:#92400e}
+.t-310  {background:#ede9fe;color:#5b21b6}
+.t-122  {background:#d1fae5;color:#065f46}
+.t-ch97 {background:#e0f2fe;color:#0c4a6e}
+.t-ch99 {background:#f1f5f9;color:#475569}
+.t-other{background:var(--g100);color:var(--g600)}
 
-XLSX_FILE        = "trimika_data.xlsx"
-EDI_FILE         = "edi_current.csv"
+/* MATCH TOGGLE */
+.mtog{display:flex;border:1px solid var(--g200);border-radius:5px;overflow:hidden}
+.mtog label{flex:1;text-align:center;padding:5px 13px;font-size:.75rem;
+  font-weight:600;cursor:pointer;transition:all .13s;color:var(--g600);background:var(--white)}
+.mtog input[type=radio]{display:none}
+.mtog input:checked+label{background:var(--navy-mid);color:var(--white)}
 
-# Dedup keys
-XLSX_DEDUP_COLS  = ["REFERENCE NO", "7501 LINE #"]
-EDI_DEDUP_COLS   = ["BROKERREFERENCE", "LINENUMBER"]
+/* ALERTS */
+.alert{padding:8px 12px;border-radius:5px;font-size:.8rem;
+  display:flex;align-items:center;gap:7px}
+.a-info   {background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.a-ok     {background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.a-err    {background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.a-warn   {background:#fffbeb;color:#92400e;border:1px solid #fde68a}
 
-ERROR_NOTIFY     = "winnie.yim@iffusa.com"
-# ─────────────────────────────────────────────────────────
+/* STAT CHIPS */
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+.chip{background:var(--off);border:1px solid var(--g200);border-radius:5px;
+  padding:5px 11px;font-size:.75rem;color:var(--g600)}
+.chip strong{color:var(--navy-mid);font-size:.85rem}
 
-logger = logging.getLogger(__name__)
+/* TABLE */
+.tbar{padding:7px 15px;background:var(--off);border-bottom:1px solid var(--g200);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:.78rem;color:var(--g600)}
+.rcount{font-weight:700;color:var(--navy-mid)}
+.twrap{overflow-x:auto;max-height:560px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:.76rem}
+thead th{background:var(--navy);color:var(--white);padding:7px 10px;
+  text-align:left;font-weight:600;font-size:.68rem;letter-spacing:.25px;
+  white-space:nowrap;position:sticky;top:0;z-index:2;
+  border-right:1px solid rgba(255,255,255,.06)}
+tbody tr:nth-child(even){background:var(--off)}
+tbody tr:hover{background:#e8edf8}
+td{padding:5px 10px;border-bottom:1px solid var(--g100);
+  white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis}
+td.mc{font-family:var(--mono);font-size:.72rem}
+td.hit{background:#fef9e0!important;font-weight:600;color:var(--navy);
+  font-family:var(--mono);font-size:.72rem}
+/* HTS code cell styling in "All HTS" column */
+td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:400px;white-space:normal;line-height:1.8}
+.hts-token{display:inline-block;padding:1px 6px;border-radius:3px;
+  margin:1px 1px;font-size:.68rem;font-weight:600}
+.hts-sep{font-size:.68rem;color:var(--g300);font-family:var(--mono)}
+.ht-match{background:#fef3c7;color:#92400e}
+.ht-plain{background:var(--g100);color:var(--g600)}
 
+/* EMPTY STATE */
+.empty{padding:46px;text-align:center;color:var(--g300)}
+.empty .ei{font-size:2.2rem;margin-bottom:8px}
+.empty .et{font-size:.85rem}
 
-# ══════════════════════════════════════════════════════════
-# GITHUB HELPERS
-# ══════════════════════════════════════════════════════════
+/* SPINNER */
+.spin{display:inline-block;width:13px;height:13px;
+  border:2px solid rgba(255,255,255,.3);border-top-color:white;
+  border-radius:50%;animation:spn .7s linear infinite}
+@keyframes spn{to{transform:rotate(360deg)}}
 
-def _gh_headers():
-    return {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept":        "application/vnd.github.v3+json",
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="logo">IFF</div>
+    <div>
+      <div class="hdr-title">Trimika Entry HTS Search</div>
+      <div class="hdr-sub">Sec 122 · Sec 310 · Sec 232 · IEEPA · Chapter 1–97</div>
+    </div>
+  </div>
+  <div class="hdr-pills">
+    <span class="pill p-amber">Customs</span>
+    <span class="pill p-teal">Multi-HTS</span>
+    <span class="pill p-gray" id="hdrEntries" style="display:none"></span>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-badge hidden" id="hdrBadge">
+      <div class="hb-main" id="hdrRows"></div>
+      <div class="hb-sub" id="hdrSrc"></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ── DATA SOURCE ── -->
+<div class="card">
+  <div class="ch">
+    <div class="ch-left">📂 Data Source</div>
+  </div>
+
+  <div class="cb">
+    <div class="row-c" style="flex-wrap:wrap;gap:10px">
+      <!-- Auto-load status -->
+      <div id="loadMsg" style="flex:1;min-width:200px"></div>
+      <!-- Manual upload fallback -->
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span style="font-size:.75rem;color:var(--g400)">Need a different date range?</span>
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+          📎 Upload XLSX
+          <input type="file" accept=".xlsx,.xls" id="fileIn" class="hidden" onchange="handleUpload(event)">
+        </label>
+      </div>
+    </div>
+
+    <!-- Date coverage notice -->
+    <div class="alert a-info" style="margin-top:11px;font-size:.78rem">
+      📅 <strong>Data coverage:</strong> Entry dates <strong>01/01/2025</strong> through
+      <strong id="yesterdayLabel"></strong>.
+      To search outside this range, upload an XLSX in the same format.
+    </div>
+
+    <div id="dataStats" class="hidden">
+      <div class="chips">
+        <div class="chip"><strong id="stRows">0</strong> rows</div>
+        <div class="chip">Entry dates: <strong id="stDates">—</strong></div>
+        <div class="chip">Importers: <strong id="stImporters">—</strong></div>
+        <div class="chip">Rows with additional tariffs: <strong id="stExtra">—</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SEARCH ── -->
+<div class="card">
+  <div class="ch">
+    <div class="ch-left">🔍 HTS Code Search</div>
+    <span style="font-size:.68rem;color:rgba(255,255,255,.45)">
+      Enter codes without dots · searches HTS NO + all Additional Tariffs · up to 5 codes
+    </span>
+  </div>
+  <div class="cb">
+    <div style="display:grid;grid-template-columns:1fr 270px;gap:18px;align-items:start">
+
+      <!-- HTS inputs -->
+      <div>
+        <label class="lbl" style="margin-bottom:7px">HTS Codes (no dots required)</label>
+        <div class="hts-list" id="htsList">
+          <div class="hts-row" data-idx="0">
+            <span class="htag t-other" id="tag0">—</span>
+            <input type="text" class="mono hts-input" id="hts0"
+              placeholder="e.g. 990388015 or 9903 or 72089010"
+              oninput="onHtsIn(this,0)" onkeydown="onHtsKey(event)">
+            <button class="bx" onclick="clearHts(0)" title="Clear">✕</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="addHts()" id="btnAddHts" style="margin-top:8px">
+          + Add Code
+        </button>
+        <div style="font-size:.68rem;color:var(--g400);margin-top:6px;line-height:1.6">
+          Enter <strong>4–10 digits</strong> — dots optional.
+          <span class="mono" style="font-size:.68rem">9903</span> matches all Ch 99 &nbsp;·&nbsp;
+          <span class="mono" style="font-size:.68rem">720836</span> matches all 7208.36.xx &nbsp;·&nbsp;
+          <span class="mono" style="font-size:.68rem">9903.88.01</span> exact match.
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div style="display:flex;flex-direction:column;gap:13px">
+        <div>
+          <label class="lbl">Entry Date Range (optional)</label>
+          <div style="display:flex;gap:7px;align-items:center">
+            <input type="text" id="dfrom" class="mono" placeholder="MM/DD/YYYY"
+              style="flex:1;font-size:.78rem;padding:6px 8px"
+              oninput="fmtDate(this)" maxlength="10">
+            <span style="font-size:.72rem;color:var(--g400)">–</span>
+            <input type="text" id="dto" class="mono" placeholder="MM/DD/YYYY"
+              style="flex:1;font-size:.78rem;padding:6px 8px"
+              oninput="fmtDate(this)" maxlength="10">
+          </div>
+          <div style="font-size:.67rem;color:var(--g400);margin-top:3px">
+            Leave blank to search all dates · type freely, e.g. 01/01/2025
+          </div>
+        </div>
+        <div>
+          <label class="lbl">Country of Origin (optional)</label>
+          <input type="text" id="countryInput" class="mono"
+            placeholder="e.g. CN  or  CN, DE, JP"
+            style="font-size:.82rem;padding:6px 9px"
+            oninput="this.value=this.value.toUpperCase()">
+          <div style="font-size:.67rem;color:var(--g400);margin-top:3px">
+            2-letter ISO code · multiple countries comma-separated · leave blank for all
+          </div>
+        </div>
+        <div class="row-c">
+          <button class="btn btn-amber" onclick="doSearch()">🔍 Search</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearSearch()">✕ Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RESULTS ── -->
+<div class="card">
+  <div class="ch">
+    <div class="ch-left">
+      📋 Results
+      <span id="rcLabel" style="font-weight:400;opacity:.6;font-size:.72rem"></span>
+    </div>
+    <button class="btn btn-green btn-sm hidden" id="btnDl" onclick="dlXlsx()">⬇ Download XLSX</button>
+  </div>
+  <div id="resultsBody">
+    <div class="empty">
+      <div class="ei">🔎</div>
+      <div class="et">Load data and run a search to see results here.</div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════
+// COLUMN DEFINITIONS — EDI CSV is primary source
+// XLSX files used only for IT Number lookup
+// ═══════════════════════════════════════════════════
+
+// EDI CSV columns
+const E = {
+  ref:        'BROKERREFERENCE',
+  entry:      'ENTRYNUMBER',
+  importer:   'IMPORTERNAME',
+  importId:   'IMPORTERID',
+  line:       'LINENUMBER',
+  hts:        'HTS_NUMBER',
+  htsDesc:    'HTS_DESCRIPTION',
+  mfr:        'MANUFACTURERNAME',
+  entryDate:  'ENTRYDATE',
+  arrivalDate:'ARRIVALDATE',
+  exportDate: 'DATEOFEXPORT',
+  transport:  'MODEOFTRANSPORT',
+  lineValue:  'ENTEREDVALUE',
+  country:    'COUNTRYOFORIGIN',
+  // Additional HTS columns (ADL1–ADL7)
+  adl: ['ADL1_HTS_NUMBER','ADL2_HTS_NUMBER','ADL3_HTS_NUMBER',
+        'ADL4_HTS_NUMBER','ADL5_HTS_NUMBER','ADL6_HTS_NUMBER','ADL7_HTS_NUMBER'],
+  adlDesc: ['ADL1_HTS_DESCRIPTION','ADL2_HTS_DESCRIPTION','ADL3_HTS_DESCRIPTION',
+            'ADL4_HTS_DESCRIPTION','ADL5_HTS_DESCRIPTION','ADL6_HTS_DESCRIPTION','ADL7_HTS_DESCRIPTION'],
+};
+
+// All HTS columns to search across
+const HTS_COLS = [E.hts, ...E.adl];
+
+// Display columns (in order)
+const DISP_COLS = [
+  { label:'IFF Reference',        src:'edi', key:'ref'         },
+  { label:'Entry Number',         src:'edi', key:'entry'       },
+  { label:'Importer Name',        src:'edi', key:'importer'    },
+  { label:'Importer EIN/CAN',     src:'edi', key:'importId'    },
+  { label:'Entry Line #',         src:'edi', key:'line'        },
+  { label:'HTS Code',             src:'edi', key:'hts'         },
+  { label:'HTS Description',      src:'edi', key:'htsDesc'     },
+  { label:'Additional Tariffs',   src:'adl', key:'adl'         }, // special: combines ADL1-7
+  { label:'Manufacturer',         src:'edi', key:'mfr'         },
+  { label:'Entry Date',           src:'edi', key:'entryDate'   },
+  { label:'Arrival Date',         src:'edi', key:'arrivalDate' },
+  { label:'IT Number',            src:'it',  key:'it'          }, // from XLSX lookup
+  { label:'Export Date',          src:'edi', key:'exportDate'  },
+  { label:'Mode of Transport',    src:'edi', key:'transport'   },
+  { label:'Line Value',           src:'edi', key:'lineValue'   },
+  { label:'Country of Origin',    src:'edi', key:'country'     },
+];
+
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+let allRows    = [];      // EDI rows (primary)
+let filtered   = [];
+let itMap      = {};      // REFERENCE NO|LINE# → IT NUMBER  (from XLSX)
+let dataLoaded = false;
+let htsCount   = 1;
+
+// ═══════════════════════════════════════════════════
+// GITHUB FILE LISTS
+// ═══════════════════════════════════════════════════
+const GH_BASE  = 'https://raw.githubusercontent.com/iffinc-ga/hts_search_tool/main/';
+
+const EDI_FILES = [
+  { url: GH_BASE + 'edi_archive.csv',  label: 'EDI archive'   },
+  { url: GH_BASE + 'edi_gap.csv',      label: 'EDI gap'       },
+  { url: GH_BASE + 'edi_gap2.csv',     label: 'EDI gap 2'     },
+  { url: GH_BASE + 'edi_current.csv',  label: 'EDI current'   },
+];
+
+const XLSX_FILES = [
+  { url: GH_BASE + 'trimika_2025.xlsx', label: '2025 archive' },
+  { url: GH_BASE + 'trimika_gap.xlsx',  label: 'gap'          },
+  { url: GH_BASE + 'trimika_data.xlsx', label: 'current'      },
+];
+
+// ═══════════════════════════════════════════════════
+// LOAD DATA
+// ═══════════════════════════════════════════════════
+async function loadGH() {
+  setMsg('<span style="font-size:.8rem;color:var(--g400)"><span class="spin" style="border-top-color:var(--navy-mid);border-color:var(--g200)"></span> Loading data…</span>');
+
+  // Load EDI CSVs as primary data source
+  const ediResults = await Promise.allSettled(
+    EDI_FILES.map(f => fetch(f.url + '?t=' + Date.now()).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    }))
+  );
+
+  let combinedRows = [];
+  const loaded = [], failed = [];
+  ediResults.forEach((r, i) => {
+    if (r.status === 'fulfilled') {
+      const rows = parseCsv(r.value);
+      combinedRows = combinedRows.concat(rows);
+      loaded.push(`${EDI_FILES[i].label} (${rows.length.toLocaleString()} rows)`);
+    } else {
+      failed.push(EDI_FILES[i].label);
     }
+  });
 
-def _gh_api_url(file_path: str) -> str:
-    return f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{file_path}"
+  if (!combinedRows.length) {
+    setMsg('<span class="alert a-err">✕ No EDI data loaded. Check GitHub config.</span>');
+    return;
+  }
 
+  applyRows(combinedRows, loaded.join(' + '));
 
-def download_from_github(file_path: str) -> bytes | None:
-    """
-    Download a file's raw bytes from GitHub.
-    Returns bytes on success, None if file doesn't exist yet.
-    """
-    resp = requests.get(
-        f"{_gh_api_url(file_path)}?ref={GITHUB_BRANCH}",
-        headers=_gh_headers(),
-        timeout=30,
-    )
-    if resp.status_code == 404:
-        logger.info("[Trimika] '%s' not found on GitHub — will create fresh.", file_path)
-        return None
-    if resp.status_code != 200:
-        raise RuntimeError(f"GitHub GET {file_path} → {resp.status_code}: {resp.text[:200]}")
+  // Always show a clear per-file breakdown
+  const loadedHtml = loaded.map(l =>
+    `<span style="color:#166534">✓ ${l}</span>`).join(' &nbsp;·&nbsp; ');
+  const failedHtml = failed.map(f =>
+    `<span style="color:#991b1b">✗ ${f} not found in repo</span>`).join(' &nbsp;·&nbsp; ');
+  const parts = [loadedHtml, failedHtml].filter(Boolean).join(' &nbsp;&nbsp; ');
+  setMsg(`<div style="font-size:.78rem;margin-top:6px;line-height:1.8">${parts}</div>`);
 
-    data = resp.json()
-    return base64.b64decode(data["content"].replace("\n", ""))
+  // Load XLSX files in background for IT Number lookup only
+  loadItLookup();
+}
 
+// ═══════════════════════════════════════════════════
+// IT NUMBER LOOKUP (from XLSX)
+// ═══════════════════════════════════════════════════
+async function loadItLookup() {
+  const results = await Promise.allSettled(
+    XLSX_FILES.map(f => fetch(f.url + '?t=' + Date.now()).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.arrayBuffer();
+    }))
+  );
 
-def push_to_github(file_path: str, file_bytes: bytes, message: str) -> bool:
-    """
-    Create or update a file on GitHub.
-    Automatically fetches the current SHA required for updates.
-    """
-    if not GITHUB_TOKEN:
-        logger.error("[Trimika] GITHUB_TOKEN is not set — cannot push to GitHub")
-        return False
-
-    api_url = _gh_api_url(file_path)
-
-    # Get existing SHA if file already exists
-    existing_sha = None
-    resp = requests.get(
-        f"{api_url}?ref={GITHUB_BRANCH}",
-        headers=_gh_headers(),
-        timeout=15,
-    )
-    if resp.status_code == 200:
-        existing_sha = resp.json().get("sha")
-        logger.info("[Trimika] '%s' current SHA: %s", file_path, existing_sha)
-    elif resp.status_code != 404:
-        logger.error("[Trimika] GitHub GET error %s: %s", resp.status_code, resp.text[:200])
-        return False
-
-    payload = {
-        "message": message,
-        "content": base64.b64encode(file_bytes).decode("utf-8"),
-        "branch":  GITHUB_BRANCH,
+  let combinedXlsx = [];
+  results.forEach(r => {
+    if (r.status === 'fulfilled') {
+      try {
+        const rows = parseXlsxToRows(r.value);
+        combinedXlsx = combinedXlsx.concat(rows);
+      } catch(e) { /* silent */ }
     }
-    if existing_sha:
-        payload["sha"] = existing_sha
+  });
 
-    put_resp = requests.put(api_url, headers=_gh_headers(), json=payload, timeout=60)
-    if put_resp.status_code in (200, 201):
-        logger.info("[Trimika] ✓ Pushed '%s' to GitHub", file_path)
-        return True
-    else:
-        logger.error("[Trimika] GitHub PUT failed %s: %s",
-                     put_resp.status_code, put_resp.text[:400])
-        return False
+  buildItMap(combinedXlsx);
+}
 
+function buildItMap(rows) {
+  itMap = {};
+  for (const row of rows) {
+    const ref  = String(row['REFERENCE NO']  || '').trim();
+    const line = String(row['7501 LINE #']   || '').trim().replace(/^0+/, '') || '0';
+    const it   = String(row['IT NUMBER']     || '').trim();
+    if (ref && it) itMap[ref + '|' + line] = it;
+  }
+  // Re-render if results already showing (IT numbers now available)
+  if (filtered.length) renderTable(filtered, getSearchCodes());
+}
 
-# ══════════════════════════════════════════════════════════
-# OUTLOOK HELPERS
-# ══════════════════════════════════════════════════════════
+function itLookup(ref, line) {
+  const r = String(ref  || '').trim();
+  const l = String(line || '').trim().replace(/^0+/, '') || '0';
+  return itMap[r + '|' + l] || '';
+}
 
-def _find_folder(parent, name: str):
-    """Recursively find a mail folder by name (case-insensitive)."""
-    for sub in parent.Folders:
-        if sub.Name.upper() == name.upper():
-            return sub
-        found = _find_folder(sub, name)
-        if found:
-            return found
-    return None
+// ═══════════════════════════════════════════════════
+// CSV PARSING
+// ═══════════════════════════════════════════════════
+function parseCsv(text) {
+  const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(Boolean);
+  if (lines.length < 2) return [];
+  const splitLine = line => {
+    const out = []; let cur = ''; let inQ = false;
+    for (const ch of line) {
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { out.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur.trim());
+    return out;
+  };
+  const headers = splitLine(lines[0]).map(h => h.replace(/^['"]|['"]$/g,'').trim());
+  return lines.slice(1).map(l => {
+    const vals = splitLine(l);
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (vals[i] ?? '').replace(/^'/,'').trim());
+    return obj;
+  });
+}
 
+// ═══════════════════════════════════════════════════
+// XLSX PARSING (for IT Number lookup only)
+// ═══════════════════════════════════════════════════
+function parseXlsxToRows(ab) {
+  const wb = XLSX.read(new Uint8Array(ab), { type:'array', cellDates:true, dateNF:'mm/dd/yyyy' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+}
 
-def get_attachment_from_outlook(subject: str, ext: str) -> str | None:
-    """
-    Find the most recent email in REPORTS_FOLDER whose subject contains
-    `subject`, save the first attachment with extension `ext` to a temp
-    file, mark the email as read, and return the local path.
-    """
-    pythoncom.CoInitialize()
-    local_path = None
+// ═══════════════════════════════════════════════════
+// APPLY ROWS (EDI data → state + UI)
+// ═══════════════════════════════════════════════════
+function applyRows(rows, src) {
+  if (!rows.length) { setMsg('<span class="alert a-warn">⚠ File appears empty.</span>'); return; }
 
-    try:
-        outlook   = win32com.client.Dispatch("Outlook.Application")
-        namespace = outlook.GetNamespace("MAPI")
+  allRows = rows; filtered = []; dataLoaded = true;
 
-        shared_box = None
-        for folder in namespace.Folders:
-            if SHARED_MAILBOX.lower() in folder.Name.lower():
-                shared_box = folder
-                break
+  document.getElementById('stRows').textContent = rows.length.toLocaleString();
+  const edates = rows.map(r => r[E.entryDate]).filter(Boolean)
+    .sort((a,b) => new Date(a) - new Date(b));
+  if (edates.length)
+    document.getElementById('stDates').textContent = `${edates[0]} – ${edates[edates.length-1]}`;
+  const uniqImp = new Set(rows.map(r => r[E.importer]).filter(Boolean));
+  document.getElementById('stImporters').textContent = uniqImp.size.toLocaleString();
+  const withExtra = rows.filter(r => E.adl.some(c => r[c])).length;
+  document.getElementById('stExtra').textContent = withExtra.toLocaleString();
+  document.getElementById('dataStats').classList.remove('hidden');
 
-        if shared_box is None:
-            logger.error("[Trimika] Cannot find shared mailbox '%s'", SHARED_MAILBOX)
-            return None
+  document.getElementById('hdrBadge').classList.remove('hidden');
+  document.getElementById('hdrRows').textContent = rows.length.toLocaleString() + ' rows';
+  document.getElementById('hdrSrc').textContent  = src;
+  document.getElementById('hdrEntries').textContent = rows.length.toLocaleString() + ' rows';
+  document.getElementById('hdrEntries').style.display = '';
 
-        reports_folder = _find_folder(shared_box, REPORTS_FOLDER)
-        if reports_folder is None:
-            top = [f.Name for f in shared_box.Folders]
-            logger.error("[Trimika] Cannot find '%s'. Top-level folders: %s",
-                         REPORTS_FOLDER, top)
-            return None
+  setMsg(`<span class="alert a-ok">✓ ${rows.length.toLocaleString()} rows loaded — ${src}</span>`);
+}
 
-        items = reports_folder.Items
-        items.Sort("[ReceivedTime]", True)
+// Handle manual XLSX upload — treat as EDI-format CSV or XLSX
+function handleUpload(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    reader.onload = ev => {
+      const rows = parseCsv(ev.target.result);
+      applyRows(rows, file.name);
+    };
+    reader.readAsText(file, 'utf-8');
+  } else {
+    reader.onload = ev => {
+      try {
+        const rows = parseXlsxToRows(ev.target.result);
+        applyRows(rows, file.name);
+      } catch(e) {
+        setMsg(`<span class="alert a-err">✕ ${e.message}</span>`);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  e.target.value = '';
+}
 
-        target_msg = None
-        for msg in items:
-            try:
-                if subject.lower() in str(msg.Subject).lower():
-                    target_msg = msg
-                    break
-            except Exception:
-                continue
+// ═══════════════════════════════════════════════════
+// ROW CODES — all HTS values from a row
+// ═══════════════════════════════════════════════════
+const nd = s => String(s || '').replace(/\./g, '').trim().toLowerCase();
 
-        if target_msg is None:
-            logger.error("[Trimika] No email found with subject '%s'", subject)
-            return None
+function rowCodes(row) {
+  const codes = new Set();
+  for (const col of HTS_COLS) {
+    const v = nd(row[col]);
+    if (v) codes.add(v);
+  }
+  return [...codes];
+}
 
-        logger.info("[Trimika] Found: '%s' received %s",
-                    target_msg.Subject, target_msg.ReceivedTime)
+// ═══════════════════════════════════════════════════
+// HTS INPUT MANAGEMENT
+// ═══════════════════════════════════════════════════
+function htsTag(raw) {
+  const v = nd(raw);
+  if (!v) return { lbl:'—', cls:'t-other' };
+  if (v.startsWith('990303'))             return { lbl:'Sec 122',  cls:'t-122'   };
+  if (v.startsWith('990331'))             return { lbl:'Sec 310',  cls:'t-310'   };
+  if (v.startsWith('990388'))             return { lbl:'Sec 301',  cls:'t-301'   };
+  if (v.startsWith('99038'))              return { lbl:'Sec 301',  cls:'t-301'   };
+  if (v.startsWith('990301') ||
+      v.startsWith('990302'))             return { lbl:'IEEPA',    cls:'t-ieepa' };
+  if (v.startsWith('9903'))               return { lbl:'Ch 99',    cls:'t-ch99'  };
+  if (v.startsWith('9904'))               return { lbl:'Sec 232',  cls:'t-232'   };
+  if (v.startsWith('99'))                 return { lbl:'Ch 99',    cls:'t-ch99'  };
+  const ch = parseInt(v.slice(0,2), 10);
+  if (ch >= 72 && ch <= 83)               return { lbl:'Sec 232',  cls:'t-232'   };
+  if (ch >= 1  && ch <= 97)               return { lbl:'Ch 1–97',  cls:'t-ch97'  };
+  return { lbl:'—', cls:'t-other' };
+}
 
-        for att in target_msg.Attachments:
-            if str(att.FileName).lower().endswith(ext):
-                tmp = tempfile.NamedTemporaryFile(
-                    suffix=ext, delete=False, prefix="trimika_"
-                )
-                tmp.close()
-                att.SaveAsFile(tmp.name)
-                local_path = tmp.name
-                logger.info("[Trimika] Saved '%s' → %s", att.FileName, local_path)
-                try:
-                    target_msg.UnRead = False
-                    target_msg.Save()
-                    logger.info("[Trimika] Marked email as read")
-                except Exception as e:
-                    logger.warning("[Trimika] Could not mark as read: %s", e)
-                break
+function lookupDesc(codeNd) {
+  if (!codeNd || !allRows.length) return null;
+  const row = allRows.find(r =>
+    HTS_COLS.some(c => nd(r[c]) === codeNd)
+  );
+  if (!row) return null;
+  // Return description from matching column
+  const matchCol = HTS_COLS.find(c => nd(row[c]) === codeNd);
+  if (!matchCol) return null;
+  const descCol = matchCol === E.hts
+    ? E.htsDesc
+    : E.adlDesc[E.adl.indexOf(matchCol)];
+  return row[descCol] || null;
+}
 
-        if local_path is None:
-            logger.error("[Trimika] Email found but no %s attachment", ext)
+function onHtsIn(inp, idx) {
+  const t  = htsTag(inp.value);
+  const el = document.getElementById(`tag${idx}`);
+  el.textContent = t.lbl; el.className = `htag ${t.cls}`;
+  const desc = dataLoaded ? lookupDesc(nd(inp.value)) : null;
+  el.title = desc || '';
+  let hint = document.getElementById(`hint${idx}`);
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = `hint${idx}`;
+    hint.style.cssText = 'font-size:.67rem;color:var(--g400);margin-top:2px;padding-left:2px;font-style:italic';
+    inp.closest('.hts-row').after(hint);
+  }
+  hint.textContent = desc || '';
+}
 
-    except Exception as exc:
-        logger.exception("[Trimika] Outlook error: %s", exc)
-    finally:
-        pythoncom.CoUninitialize()
+function onHtsKey(e) { if (e.key === 'Enter') addHts(); }
 
-    return local_path
+function addHts() {
+  if (htsCount >= 5) return;
+  const list = document.getElementById('htsList');
+  const idx  = htsCount++;
+  const div  = document.createElement('div');
+  div.className = 'hts-row'; div.dataset.idx = idx;
+  div.innerHTML = `
+    <span class="htag t-other" id="tag${idx}">—</span>
+    <input type="text" class="mono hts-input" id="hts${idx}"
+      placeholder="e.g. 990388015 or 72083600"
+      oninput="onHtsIn(this,${idx})" onkeydown="onHtsKey(event)">
+    <button class="bx" onclick="removeHts(${idx})" title="Remove">✕</button>`;
+  list.appendChild(div);
+  document.getElementById(`hts${idx}`).focus();
+  if (htsCount >= 5) document.getElementById('btnAddHts').disabled = true;
+}
 
+function clearHts(idx) {
+  const inp = document.getElementById(`hts${idx}`);
+  inp.value = ''; onHtsIn(inp, idx);
+}
 
-# ══════════════════════════════════════════════════════════
-# XLSX: APPEND + DEDUP + PUSH
-# ══════════════════════════════════════════════════════════
+function removeHts(idx) {
+  const list = document.getElementById('htsList');
+  if (list.children.length <= 1) { clearHts(idx); return; }
+  document.querySelector(`.hts-row[data-idx="${idx}"]`)?.remove();
+  htsCount = list.children.length;
+  document.getElementById('btnAddHts').disabled = false;
+}
 
-def append_and_push_xlsx(new_file_path: str) -> bool:
-    """
-    Download trimika_data.xlsx from GitHub, append today's rows,
-    deduplicate on XLSX_DEDUP_COLS, and push back.
-    """
-    logger.info("[Trimika XLSX] Reading new file: %s", new_file_path)
-    df_new = pd.read_excel(new_file_path, dtype=str)
-    df_new = df_new.fillna("")
-    logger.info("[Trimika XLSX] New file rows: %d", len(df_new))
+function getSearchCodes() {
+  return Array.from(document.querySelectorAll('.hts-input'))
+    .map(i => nd(i.value)).filter(Boolean);
+}
 
-    # Download existing file from GitHub
-    existing_bytes = download_from_github(XLSX_FILE)
-    if existing_bytes:
-        df_existing = pd.read_excel(io.BytesIO(existing_bytes), dtype=str).fillna("")
-        logger.info("[Trimika XLSX] Existing GitHub file rows: %d", len(df_existing))
-    else:
-        df_existing = pd.DataFrame()
-        logger.info("[Trimika XLSX] No existing file — starting fresh")
+// ═══════════════════════════════════════════════════
+// DATE TEXT INPUT HELPERS
+// ═══════════════════════════════════════════════════
+function fmtDate(inp) {
+  let v = inp.value.replace(/[^0-9]/g, '');
+  if (v.length > 2) v = v.slice(0,2) + '/' + v.slice(2);
+  if (v.length > 5) v = v.slice(0,5) + '/' + v.slice(5);
+  if (v.length > 10) v = v.slice(0,10);
+  inp.value = v;
+  const full = v.length === 10;
+  inp.style.borderColor = (full && isNaN(new Date(v))) ? 'var(--red)' : '';
+}
 
-    # Append and deduplicate
-    df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-    before = len(df_combined)
+function parseDt(str, endOfDay) {
+  if (!str || str.length < 8) return null;
+  const d = new Date(str);
+  if (isNaN(d)) return null;
+  if (endOfDay) d.setHours(23,59,59,999);
+  return d;
+}
 
-    # Only dedup on columns that actually exist in the data
-    dedup_cols = [c for c in XLSX_DEDUP_COLS if c in df_combined.columns]
-    if dedup_cols:
-        df_combined = df_combined.drop_duplicates(subset=dedup_cols, keep="last")
-        dupes = before - len(df_combined)
-        if dupes:
-            logger.info("[Trimika XLSX] Removed %d duplicate rows (kept newest)", dupes)
-    else:
-        logger.warning("[Trimika XLSX] Dedup columns not found: %s", XLSX_DEDUP_COLS)
+// ═══════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════
+function doSearch() {
+  if (!dataLoaded) { setMsg('<span class="alert a-warn">⚠ Data is still loading — please wait.</span>'); return; }
+  const codes = getSearchCodes();
+  const countryCheck = (document.getElementById('countryInput').value || '').trim();
+  if (!codes.length && !countryCheck) {
+    showEmpty('⚠️', 'Enter at least one HTS code or a Country of Origin to search.');
+    return;
+  }
 
-    df_combined = df_combined.reset_index(drop=True)
-    logger.info("[Trimika XLSX] Combined rows after dedup: %d", len(df_combined))
+  const dfrom     = document.getElementById('dfrom').value;
+  const dto       = document.getElementById('dto').value;
+  const countries = (document.getElementById('countryInput').value || '')
+    .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 
-    # Write to bytes and push
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df_combined.to_excel(writer, index=False, sheet_name="wy_trimika_tool")
-    buf.seek(0)
+  filtered = allRows.filter(row => {
+    // Date filter
+    if (dfrom || dto) {
+      const d = new Date(row[E.entryDate]);
+      if (!isNaN(d)) {
+        if (dfrom && parseDt(dfrom) && d < parseDt(dfrom))     return false;
+        if (dto   && parseDt(dto)   && d > parseDt(dto, true)) return false;
+      }
+    }
+    // Country of origin filter
+    if (countries.length) {
+      const rowCountry = String(row[E.country] || '').trim().toUpperCase();
+      if (!countries.includes(rowCountry)) return false;
+    }
+    // HTS match — only if codes were entered
+    if (codes.length) {
+      const rc = rowCodes(row);
+      if (!codes.some(code =>
+        rc.some(c => c.startsWith(code) || code.startsWith(c.slice(0, code.length)))
+      )) return false;
+    }
+    return true;
+  });
 
-    return push_to_github(
-        XLSX_FILE,
-        buf.read(),
-        f"Append trimika data — {len(df_new)} new rows, {len(df_combined)} total",
-    )
+  renderTable(filtered, codes);
+}
 
+function clearSearch() {
+  const list = document.getElementById('htsList');
+  Array.from(list.querySelectorAll('.hts-row')).forEach((r, i) => {
+    if (i === 0) clearHts(0);
+    else r.remove();
+  });
+  htsCount = 1;
+  document.getElementById('btnAddHts').disabled = false;
+  document.getElementById('dfrom').value        = '';
+  document.getElementById('dto').value          = '';
+  document.getElementById('countryInput').value = '';
+  filtered = [];
+  document.getElementById('rcLabel').textContent = '';
+  document.getElementById('btnDl').classList.add('hidden');
+  showEmpty('🔎', 'Load data and run a search to see results here.');
+}
 
-# ══════════════════════════════════════════════════════════
-# EDI CSV: APPEND + DEDUP + PUSH
-# ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+// RENDER TABLE
+// ═══════════════════════════════════════════════════
+// Get the combined ADL codes for a row (non-empty only)
+function adlCodes(row) {
+  return E.adl.map(c => row[c] || '').filter(Boolean);
+}
 
-# All columns the HTML tool needs from the EDI CSV
-EDI_KEEP_COLS = [
-    "BROKERREFERENCE", "ENTRYNUMBER", "IMPORTERNAME", "IMPORTERID",
-    "LINENUMBER", "HTS_NUMBER", "HTS_DESCRIPTION", "MANUFACTURERNAME",
-    "ENTRYDATE", "ARRIVALDATE", "DATEOFEXPORT", "MODEOFTRANSPORT",
-    "ENTEREDVALUE", "COUNTRYOFORIGIN",
-    "ADL1_HTS_NUMBER", "ADL2_HTS_NUMBER", "ADL3_HTS_NUMBER",
-    "ADL4_HTS_NUMBER", "ADL5_HTS_NUMBER", "ADL6_HTS_NUMBER", "ADL7_HTS_NUMBER",
-    "ADL1_HTS_DESCRIPTION", "ADL2_HTS_DESCRIPTION", "ADL3_HTS_DESCRIPTION",
-    "ADL4_HTS_DESCRIPTION", "ADL5_HTS_DESCRIPTION", "ADL6_HTS_DESCRIPTION",
-    "ADL7_HTS_DESCRIPTION",
-]
+function renderTable(rows, matchCodes) {
+  const n = rows.length;
+  document.getElementById('rcLabel').textContent = `— ${n.toLocaleString()} row${n !== 1 ? 's' : ''}`;
+  n > 0
+    ? document.getElementById('btnDl').classList.remove('hidden')
+    : document.getElementById('btnDl').classList.add('hidden');
 
+  if (!n) {
+    showEmpty('🔍', 'No results found. Try a shorter prefix (e.g. 9903 instead of 990388015).');
+    return;
+  }
 
-def _slim_edi_df(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Keep only the 28 columns needed by the HTML tool.
-    Case-insensitive column matching. Missing columns are added as empty.
-    """
-    col_map = {c.upper(): c for c in df.columns}
-    result  = pd.DataFrame()
-    for needed in EDI_KEEP_COLS:
-        actual = col_map.get(needed.upper())
-        if actual:
-            result[needed] = df[actual].astype(str).str.replace(r"^'", "", regex=True).str.strip()
-        else:
-            logger.warning("[Trimika EDI] Column '%s' not found in file — leaving blank", needed)
-            result[needed] = ""
-    return result
+  const LIMIT   = 2500;
+  const display = rows.slice(0, LIMIT);
 
+  let html = '<div class="twrap"><table><thead><tr>';
+  for (const dc of DISP_COLS) html += `<th>${esc(dc.label)}</th>`;
+  html += '</tr></thead><tbody>';
 
-def append_and_push_edi(new_file_path: str) -> bool:
-    """
-    Download edi_current.csv from GitHub, append today's rows (28 columns),
-    deduplicate on EDI_DEDUP_COLS, and push back.
-    """
-    logger.info("[Trimika EDI] Reading new CSV: %s", new_file_path)
-    try:
-        df_raw = pd.read_csv(new_file_path, dtype=str, low_memory=False).fillna("")
-    except Exception as e:
-        logger.error("[Trimika EDI] Failed to read CSV: %s", e)
-        return False
+  for (const row of display) {
+    html += '<tr>';
+    for (const dc of DISP_COLS) {
 
-    logger.info("[Trimika EDI] Raw file: %d rows, %d columns", len(df_raw), len(df_raw.columns))
+      if (dc.src === 'adl') {
+        // Additional tariffs: combine ADL1-7, show as tokens
+        const tokens = adlCodes(row);
+        if (!tokens.length) { html += '<td></td>'; continue; }
+        let inner = '';
+        tokens.forEach((tok, i) => {
+          const tokNd = nd(tok);
+          const isHit = matchCodes.some(c => tokNd.startsWith(c) || c.startsWith(tokNd.slice(0,c.length)));
+          inner += `<span class="hts-token ${isHit ? 'ht-match' : 'ht-plain'}">${esc(tok)}</span>`;
+          if (i < tokens.length - 1) inner += `<span class="hts-sep">,&nbsp;</span>`;
+        });
+        html += `<td class="hts-cell" title="${esc(tokens.join(',  '))}">${inner}</td>`;
 
-    # Slim to 28 needed columns
-    df_new = _slim_edi_df(df_raw)
-    logger.info("[Trimika EDI] Slimmed to %d columns, %d rows", len(df_new.columns), len(df_new))
+      } else if (dc.src === 'it') {
+        const val = itLookup(row[E.ref], row[E.line]);
+        html += `<td class="mc" title="${esc(val)}">${esc(val)}</td>`;
 
-    # Download existing file from GitHub
-    existing_bytes = download_from_github(EDI_FILE)
-    if existing_bytes:
-        try:
-            df_existing = pd.read_csv(io.BytesIO(existing_bytes), dtype=str).fillna("")
-            logger.info("[Trimika EDI] Existing GitHub file: %d rows", len(df_existing))
-        except Exception as e:
-            logger.warning("[Trimika EDI] Could not read existing file (%s) — starting fresh", e)
-            df_existing = pd.DataFrame(columns=EDI_KEEP_COLS)
-    else:
-        df_existing = pd.DataFrame(columns=EDI_KEEP_COLS)
-        logger.info("[Trimika EDI] No existing file — starting fresh")
+      } else {
+        const col = E[dc.key];
+        const val = String(row[col] ?? '');
+        const isHts = dc.key === 'hts';
+        const vNd   = nd(val);
+        const isHit = isHts && matchCodes.some(c =>
+          vNd.startsWith(c) || c.startsWith(vNd.slice(0, c.length)));
+        const mono  = ['entry','line','importId','lineValue'].includes(dc.key);
+        html += `<td class="${isHit ? 'hit' : (mono ? 'mc' : '')}" title="${esc(val)}">${esc(val)}</td>`;
+      }
+    }
+    html += '</tr>';
+  }
 
-    # Append and deduplicate
-    df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-    before      = len(df_combined)
+  html += '</tbody></table></div>';
 
-    dedup_cols = [c for c in EDI_DEDUP_COLS if c in df_combined.columns]
-    if dedup_cols:
-        df_combined = df_combined.drop_duplicates(subset=dedup_cols, keep="last")
-        dupes = before - len(df_combined)
-        if dupes:
-            logger.info("[Trimika EDI] Removed %d duplicate rows (kept newest)", dupes)
-    else:
-        logger.warning("[Trimika EDI] Dedup columns not found: %s", EDI_DEDUP_COLS)
+  if (rows.length > LIMIT)
+    html += `<div class="alert a-info" style="margin:10px">
+      Showing ${LIMIT.toLocaleString()} of ${rows.length.toLocaleString()} rows.
+      Download XLSX to see all results.
+    </div>`;
 
-    df_combined = df_combined.reset_index(drop=True)
-    logger.info("[Trimika EDI] Combined rows after dedup: %d", len(df_combined))
+  document.getElementById('resultsBody').innerHTML = html;
+}
 
-    buf = io.BytesIO()
-    df_combined.to_csv(buf, index=False)
-    buf.seek(0)
+// ═══════════════════════════════════════════════════
+// DOWNLOAD XLSX (ExcelJS)
+// ═══════════════════════════════════════════════════
+async function dlXlsx() {
+  if (!filtered.length) return;
 
-    return push_to_github(
-        EDI_FILE,
-        buf.read(),
-        f"Append EDI data — {len(df_new)} new rows, {len(df_combined)} total",
-    )
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'IFF Trimika Tool';
+  const ws = wb.addWorksheet('HTS Search Results');
 
+  ws.columns = DISP_COLS.map(dc => ({ header: dc.label, key: dc.label, width: 24 }));
 
-# ══════════════════════════════════════════════════════════
-# CLEANUP
-# ══════════════════════════════════════════════════════════
+  // Header styling
+  const hdrRow = ws.getRow(1);
+  hdrRow.height = 18;
+  hdrRow.eachCell({ includeEmpty: true }, cell => {
+    cell.fill      = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF0F2545' } };
+    cell.font      = { bold:true, color:{ argb:'FFFFFFFF' }, name:'Calibri', size:11 };
+    cell.border    = { bottom:{ style:'medium', color:{ argb:'FFE8A020' } } };
+    cell.alignment = { vertical:'middle', wrapText:false };
+  });
 
-def cleanup(local_path: str):
-    try:
-        if local_path and os.path.exists(local_path):
-            os.remove(local_path)
-            logger.info("[Trimika] Removed temp file %s", local_path)
-    except Exception as exc:
-        logger.warning("[Trimika] Could not remove temp file: %s", exc)
+  // Data rows
+  const lineValIdx = DISP_COLS.findIndex(dc => dc.key === 'lineValue') + 1;
 
+  filtered.forEach((row, rowIdx) => {
+    const vals = DISP_COLS.map(dc => {
+      if (dc.src === 'adl')
+        return adlCodes(row).join(',  ');
+      if (dc.src === 'it')
+        return itLookup(row[E.ref], row[E.line]);
+      return String(row[E[dc.key]] ?? '');
+    });
 
-# ══════════════════════════════════════════════════════════
-# MAIN ENTRY POINTS
-# ══════════════════════════════════════════════════════════
+    const excelRow = ws.addRow(vals);
+    excelRow.height = 15;
+    const bgArgb = rowIdx % 2 === 0 ? 'FFEEF1F7' : 'FFFFFFFF';
 
-def run_trimika_update():
-    """
-    Full daily pipeline — XLSX then EDI.
-    Called by APScheduler at 07:32 weekdays.
-    """
-    logger.info("[Trimika] ─── Starting daily update ───")
+    excelRow.eachCell({ includeEmpty:true }, (cell, colIdx) => {
+      cell.fill      = { type:'pattern', pattern:'solid', fgColor:{ argb:bgArgb } };
+      cell.font      = { name:'Calibri', size:10 };
+      cell.alignment = { vertical:'middle' };
+      cell.border    = { bottom:{ style:'thin', color:{ argb:'FFDDE3EE' } } };
+      if (colIdx === lineValIdx) {
+        const num = parseFloat(String(cell.value).replace(/,/g,''));
+        if (!isNaN(num)) {
+          cell.value     = num;
+          cell.numFmt    = '$#,##0.00';
+          cell.alignment = { vertical:'middle', horizontal:'right' };
+        }
+      }
+    });
+  });
 
-    # ── XLSX ──────────────────────────────────────────────
-    xlsx_path = get_attachment_from_outlook(EMAIL_SUBJECT, ".xlsx")
-    if not xlsx_path:
-        logger.error("[Trimika] Aborting XLSX update — no attachment found")
-        _send_error_email(
-            f"Could not retrieve XLSX from Outlook.\n"
-            f"Check that an email with subject '{EMAIL_SUBJECT}' "
-            f"exists in {SHARED_MAILBOX} / {REPORTS_FOLDER}."
-        )
-    else:
-        success = append_and_push_xlsx(xlsx_path)
-        cleanup(xlsx_path)
-        if success:
-            logger.info("[Trimika] ─── XLSX update complete ✓ ───")
-        else:
-            logger.error("[Trimika] ─── XLSX update FAILED ───")
-            _send_error_email("GitHub push failed for trimika_data.xlsx.")
+  ws.autoFilter = { from:{ row:1, column:1 }, to:{ row:1, column:DISP_COLS.length } };
+  ws.views = [{ state:'frozen', ySplit:1 }];
 
-    # ── EDI CSV ───────────────────────────────────────────
-    logger.info("[Trimika] ─── Starting EDI update ───")
-    edi_path = get_attachment_from_outlook(EDI_SUBJECT, ".csv")
-    if not edi_path:
-        logger.error("[Trimika] Aborting EDI update — no attachment found")
-    else:
-        success = append_and_push_edi(edi_path)
-        cleanup(edi_path)
-        if success:
-            logger.info("[Trimika] ─── EDI update complete ✓ ───")
-        else:
-            logger.error("[Trimika] ─── EDI update FAILED ───")
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob   = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const codes = getSearchCodes().join('-') || 'results';
+  const today = new Date().toISOString().slice(0,10);
+  const a     = document.createElement('a');
+  a.href      = URL.createObjectURL(blob);
+  a.download  = `trimika_${codes}_${today}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
+// ═══════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════
+const esc = s => String(s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-# ══════════════════════════════════════════════════════════
-# ERROR EMAIL
-# ══════════════════════════════════════════════════════════
+function setMsg(h)  { document.getElementById('loadMsg').innerHTML = h; }
+function showEmpty(icon, text) {
+  document.getElementById('resultsBody').innerHTML =
+    `<div class="empty"><div class="ei">${icon}</div><div class="et">${text}</div></div>`;
+}
 
-def _send_error_email(body: str):
-    pythoncom.CoInitialize()
-    try:
-        outlook      = win32com.client.Dispatch("Outlook.Application")
-        mail         = outlook.CreateItem(0)
-        mail.To      = ERROR_NOTIFY
-        mail.Subject = "[IFF Automation] Trimika Update Error"
-        mail.Body    = f"Trimika daily update encountered an error:\n\n{body}\n\nCheck logs for details."
-        mail.Send()
-        logger.info("[Trimika] Error notification sent to %s", ERROR_NOTIFY)
-    except Exception as exc:
-        logger.warning("[Trimika] Could not send error email: %s", exc)
-    finally:
-        pythoncom.CoUninitialize()
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+// Set yesterday label
+const yest = new Date();
+yest.setDate(yest.getDate() - 1);
+document.getElementById('yesterdayLabel').textContent =
+  (yest.getMonth()+1).toString().padStart(2,'0') + '/' +
+  yest.getDate().toString().padStart(2,'0') + '/' +
+  yest.getFullYear();
 
-
-# ══════════════════════════════════════════════════════════
-# SCHEDULER INTEGRATION — add to comprehensive_scheduler.py
-# ══════════════════════════════════════════════════════════
-#
-#   from update_trimika import run_trimika_update
-#
-#   scheduler.add_job(
-#       lambda: safe_execute(run_trimika_update, "update_trimika.py"),
-#       trigger=CronTrigger(day_of_week='mon-fri', hour=7, minute=32),
-#       id='trimika_github_update',
-#       name='Trimika HTS Data → GitHub - Weekdays 7:32 AM',
-#       max_instances=1,
-#       misfire_grace_time=600,
-#       coalesce=True
-#   )
-#
-# ══════════════════════════════════════════════════════════
-
-
-if __name__ == "__main__":
-    logging.basicConfig(
-        level   = logging.INFO,
-        format  = "%(asctime)s  %(levelname)-8s  %(message)s",
-        datefmt = "%Y-%m-%d %H:%M:%S",
-    )
-    run_trimika_update()
+// Auto-load
+loadGH();
+</script>
+</body>
+</html>
