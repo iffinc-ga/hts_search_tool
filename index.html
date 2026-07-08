@@ -245,7 +245,7 @@ td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:400px;white-space
   <div class="ch">
     <div class="ch-left">🔍 HTS Code Search</div>
     <span style="font-size:.68rem;color:rgba(255,255,255,.45)">
-      Enter codes without dots · searches HTS NO + all Additional Tariffs · up to 5 codes
+      Enter codes without dots · searches HTS NO + all Additional Tariffs · 5 manual or unlimited via bulk paste/upload
     </span>
   </div>
   <div class="cb">
@@ -253,24 +253,58 @@ td.hts-cell{font-family:var(--mono);font-size:.72rem;max-width:400px;white-space
 
       <!-- HTS inputs -->
       <div>
-        <label class="lbl" style="margin-bottom:7px">HTS Codes (no dots required)</label>
-        <div class="hts-list" id="htsList">
-          <div class="hts-row" data-idx="0">
-            <span class="htag t-other" id="tag0">—</span>
-            <input type="text" class="mono hts-input" id="hts0"
-              placeholder="e.g. 990388015 or 9903 or 72089010"
-              oninput="onHtsIn(this,0)" onkeydown="onHtsKey(event)">
-            <button class="bx" onclick="clearHts(0)" title="Clear">✕</button>
+        <div class="row-c" style="margin-bottom:9px">
+          <div class="mtog" style="width:auto;display:inline-flex;min-width:320px">
+            <input type="radio" name="htsMode" id="modeManual" checked onchange="setHtsMode('manual')">
+            <label for="modeManual">✎ Manual Entry</label>
+            <input type="radio" name="htsMode" id="modeBulk" onchange="setHtsMode('bulk')">
+            <label for="modeBulk">📋 Bulk Paste / Upload</label>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="addHts()" id="btnAddHts" style="margin-top:8px">
-          + Add Code
-        </button>
-        <div style="font-size:.68rem;color:var(--g400);margin-top:6px;line-height:1.6">
-          Enter <strong>4–10 digits</strong> — dots optional.
-          <span class="mono" style="font-size:.68rem">9903</span> matches all Ch 99 &nbsp;·&nbsp;
-          <span class="mono" style="font-size:.68rem">720836</span> matches all 7208.36.xx &nbsp;·&nbsp;
-          <span class="mono" style="font-size:.68rem">9903.88.01</span> exact match.
+
+        <!-- Manual entry panel -->
+        <div id="manualPanel">
+          <label class="lbl" style="margin-bottom:7px">HTS Codes (no dots required)</label>
+          <div class="hts-list" id="htsList">
+            <div class="hts-row" data-idx="0">
+              <span class="htag t-other" id="tag0">—</span>
+              <input type="text" class="mono hts-input" id="hts0"
+                placeholder="e.g. 990388015 or 9903 or 72089010"
+                oninput="onHtsIn(this,0)" onkeydown="onHtsKey(event)">
+              <button class="bx" onclick="clearHts(0)" title="Clear">✕</button>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="addHts()" id="btnAddHts" style="margin-top:8px">
+            + Add Code
+          </button>
+          <div style="font-size:.68rem;color:var(--g400);margin-top:6px;line-height:1.6">
+            Enter <strong>4–10 digits</strong> — dots optional.
+            <span class="mono" style="font-size:.68rem">9903</span> matches all Ch 99 &nbsp;·&nbsp;
+            <span class="mono" style="font-size:.68rem">720836</span> matches all 7208.36.xx &nbsp;·&nbsp;
+            <span class="mono" style="font-size:.68rem">9903.88.01</span> exact match.
+          </div>
+        </div>
+
+        <!-- Bulk paste / upload panel -->
+        <div id="bulkPanel" class="hidden">
+          <label class="lbl" style="margin-bottom:7px">Paste HTS Codes (any number)</label>
+          <textarea id="bulkCodes" class="mono"
+            style="width:100%;height:150px;border:1px solid var(--g200);border-radius:5px;
+              padding:8px 10px;font-size:.78rem;resize:vertical;color:var(--g700)"
+            placeholder="Paste codes — one per line, or separated by commas/spaces&#10;e.g.&#10;9613808000&#10;9613806000&#10;9503000090"
+            oninput="onBulkChange()"></textarea>
+          <div class="row-c" style="margin-top:8px;justify-content:space-between">
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+              📎 Upload File (.csv, .txt, .xlsx)
+              <input type="file" accept=".csv,.txt,.xlsx,.xls" id="bulkFileIn" class="hidden" onchange="handleBulkUpload(event)">
+            </label>
+            <button class="btn btn-ghost btn-sm" onclick="clearBulk()">✕ Clear</button>
+          </div>
+          <div id="bulkSummary" style="font-size:.72rem;color:var(--g400);margin-top:7px;line-height:1.6"></div>
+          <div style="font-size:.68rem;color:var(--g400);margin-top:4px;line-height:1.6">
+            Paste any number of codes, or upload a file with one code per line (or a column of codes in a spreadsheet).
+            Dots optional — non-digit characters are stripped automatically.
+          </div>
         </div>
       </div>
 
@@ -389,6 +423,7 @@ let filtered   = [];
 let itMap      = {};      // REFERENCE NO|LINE# → IT NUMBER  (from XLSX)
 let dataLoaded = false;
 let htsCount   = 1;
+let htsMode    = 'manual';   // 'manual' | 'bulk'
 
 // ═══════════════════════════════════════════════════
 // GITHUB FILE LISTS
@@ -680,8 +715,90 @@ function removeHts(idx) {
 }
 
 function getSearchCodes() {
+  if (htsMode === 'bulk') {
+    const text = document.getElementById('bulkCodes').value;
+    return [...new Set(extractCodesFromText(text).map(nd))];
+  }
   return Array.from(document.querySelectorAll('.hts-input'))
     .map(i => nd(i.value)).filter(Boolean);
+}
+
+// ═══════════════════════════════════════════════════
+// BULK PASTE / UPLOAD
+// ═══════════════════════════════════════════════════
+function setHtsMode(mode) {
+  htsMode = mode;
+  document.getElementById('manualPanel').classList.toggle('hidden', mode !== 'manual');
+  document.getElementById('bulkPanel').classList.toggle('hidden', mode !== 'bulk');
+  document.getElementById('modeManual').checked = mode === 'manual';
+  document.getElementById('modeBulk').checked   = mode === 'bulk';
+}
+
+// Pull digit-groups out of pasted/uploaded text — accepts newline, comma,
+// semicolon, tab or space separated codes, with or without dots.
+function extractCodesFromText(text) {
+  const tokens = String(text || '').split(/[\r\n,;\t ]+/).map(t => t.trim()).filter(Boolean);
+  const codes = [];
+  for (const tok of tokens) {
+    const digits = tok.replace(/[^\d]/g, '');
+    if (digits.length >= 4 && digits.length <= 12) codes.push(digits);
+  }
+  return codes;
+}
+
+function onBulkChange() {
+  const text  = document.getElementById('bulkCodes').value;
+  const codes = [...new Set(extractCodesFromText(text))];
+  const el = document.getElementById('bulkSummary');
+  if (!codes.length) { el.innerHTML = ''; return; }
+  const counts = {};
+  codes.forEach(c => { const t = htsTag(c).lbl; counts[t] = (counts[t] || 0) + 1; });
+  const breakdown = Object.entries(counts).map(([k, v]) => `${esc(k)}: ${v}`).join(' &nbsp;·&nbsp; ');
+  el.innerHTML = `<strong style="color:var(--navy-mid)">${codes.length.toLocaleString()}</strong> unique code${codes.length !== 1 ? 's' : ''} parsed &nbsp;·&nbsp; ${breakdown}`;
+}
+
+function clearBulk() {
+  document.getElementById('bulkCodes').value = '';
+  document.getElementById('bulkSummary').innerHTML = '';
+}
+
+function appendBulkText(text) {
+  const ta = document.getElementById('bulkCodes');
+  const existing = ta.value.trim();
+  const added = String(text || '').trim();
+  ta.value = existing ? existing + '\n' + added : added;
+  setHtsMode('bulk');
+  onBulkChange();
+}
+
+// Upload a file of codes: .csv/.txt read as plain text, .xlsx/.xls flattened
+// across all sheets/cells and scanned for digit groups.
+function handleBulkUpload(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const name = file.name.toLowerCase();
+  const reader = new FileReader();
+
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+        let allText = '';
+        wb.SheetNames.forEach(sn => {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '', raw: false });
+          rows.forEach(r => { allText += r.join('\n') + '\n'; });
+        });
+        appendBulkText(allText);
+      } catch (err) {
+        document.getElementById('bulkSummary').innerHTML =
+          `<span style="color:var(--red)">✕ Could not read file: ${esc(err.message)}</span>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    reader.onload = ev => appendBulkText(ev.target.result);
+    reader.readAsText(file, 'utf-8');
+  }
+  e.target.value = '';
 }
 
 // ═══════════════════════════════════════════════════
@@ -717,36 +834,47 @@ function doSearch() {
     return;
   }
 
-  const dfrom     = document.getElementById('dfrom').value;
-  const dto       = document.getElementById('dto').value;
-  const countries = (document.getElementById('countryInput').value || '')
-    .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  // Large bulk searches can take a moment — show a spinner and let the UI
+  // paint before running the (potentially heavy) filter.
+  document.getElementById('resultsBody').innerHTML = `
+    <div class="empty">
+      <div class="ei"><span class="spin" style="width:22px;height:22px;border-top-color:var(--navy-mid);border-color:var(--g200)"></span></div>
+      <div class="et">Searching${codes.length > 10 ? ` across ${codes.length.toLocaleString()} codes` : ''}…</div>
+    </div>`;
+  document.getElementById('btnDl').classList.add('hidden');
 
-  filtered = allRows.filter(row => {
-    // Date filter
-    if (dfrom || dto) {
-      const d = new Date(row[E.entryDate]);
-      if (!isNaN(d)) {
-        if (dfrom && parseDt(dfrom) && d < parseDt(dfrom))     return false;
-        if (dto   && parseDt(dto)   && d > parseDt(dto, true)) return false;
+  setTimeout(() => {
+    const dfrom     = document.getElementById('dfrom').value;
+    const dto       = document.getElementById('dto').value;
+    const countries = (document.getElementById('countryInput').value || '')
+      .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+
+    filtered = allRows.filter(row => {
+      // Date filter
+      if (dfrom || dto) {
+        const d = new Date(row[E.entryDate]);
+        if (!isNaN(d)) {
+          if (dfrom && parseDt(dfrom) && d < parseDt(dfrom))     return false;
+          if (dto   && parseDt(dto)   && d > parseDt(dto, true)) return false;
+        }
       }
-    }
-    // Country of origin filter
-    if (countries.length) {
-      const rowCountry = String(row[E.country] || '').trim().toUpperCase();
-      if (!countries.includes(rowCountry)) return false;
-    }
-    // HTS match — only if codes were entered
-    if (codes.length) {
-      const rc = rowCodes(row);
-      if (!codes.some(code =>
-        rc.some(c => c.startsWith(code) || code.startsWith(c.slice(0, code.length)))
-      )) return false;
-    }
-    return true;
-  });
+      // Country of origin filter
+      if (countries.length) {
+        const rowCountry = String(row[E.country] || '').trim().toUpperCase();
+        if (!countries.includes(rowCountry)) return false;
+      }
+      // HTS match — only if codes were entered
+      if (codes.length) {
+        const rc = rowCodes(row);
+        if (!codes.some(code =>
+          rc.some(c => c.startsWith(code) || code.startsWith(c.slice(0, code.length)))
+        )) return false;
+      }
+      return true;
+    });
 
-  renderTable(filtered, codes);
+    renderTable(filtered, codes);
+  }, 20);
 }
 
 function clearSearch() {
@@ -757,6 +885,8 @@ function clearSearch() {
   });
   htsCount = 1;
   document.getElementById('btnAddHts').disabled = false;
+  clearBulk();
+  setHtsMode('manual');
   document.getElementById('dfrom').value        = '';
   document.getElementById('dto').value          = '';
   document.getElementById('countryInput').value = '';
@@ -900,11 +1030,14 @@ async function dlXlsx() {
   const blob   = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   });
-  const codes = getSearchCodes().join('-') || 'results';
+  const codesArr   = getSearchCodes();
+  const codesLabel = codesArr.length > 5
+    ? `bulk_${codesArr.length}codes`
+    : (codesArr.join('-') || 'results');
   const today = new Date().toISOString().slice(0,10);
   const a     = document.createElement('a');
   a.href      = URL.createObjectURL(blob);
-  a.download  = `trimika_${codes}_${today}.xlsx`;
+  a.download  = `trimika_${codesLabel}_${today}.xlsx`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
